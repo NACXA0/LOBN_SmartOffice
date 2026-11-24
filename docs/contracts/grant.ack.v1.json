@@ -1,0 +1,9 @@
+{
+  "schema": "grant.ack.v1",
+  "grant_id": "g_9001",
+  "command_id": "550e8400-e29b-41d4-a716-446655440000",
+  "result": "opened",
+  "correlation_id": "corr_abc",
+  "ts": 1732435205.0,
+  "detail": ""
+}

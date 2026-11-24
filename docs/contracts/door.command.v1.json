@@ -1,0 +1,14 @@
+{
+  "schema": "door.command.v1",
+  "command_id": "550e8400-e29b-41d4-a716-446655440000",
+  "door_id": "main",
+  "action": "open",
+  "seconds": 5,
+  "reason": "booking_grant",
+  "grant_id": "g_9001",
+  "user_id": "u_1001",
+  "person_id": 12,
+  "person_name": "张三",
+  "token": null,
+  "ts": 1732435200.0
+}

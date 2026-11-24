@@ -1,0 +1,14 @@
+{
+  "schema": "grant.v1",
+  "grant_id": "g_9001",
+  "user_id": "u_1001",
+  "room_id": "room_1",
+  "source": "booking",
+  "order_id": "o_5001",
+  "voucher_id": null,
+  "window_start": 1732434600,
+  "window_end": 1732438800,
+  "status": "pending",
+  "correlation_id": "corr_abc",
+  "created_at": 1732430000
+}

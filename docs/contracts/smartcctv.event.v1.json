@@ -1,0 +1,16 @@
+{
+  "schema": "smartcctv.event.v1",
+  "type": "face_known",
+  "level": "info",
+  "cam_id": "door",
+  "ts": 1732435200.0,
+  "mode": "day",
+  "payload": {
+    "person_id": 12,
+    "person_name": "张三",
+    "user_id": "u_1001",
+    "similarity": 0.62,
+    "snapshot_path": "snapshots/2025/11/24/door_001.jpg",
+    "track_id": 7
+  }
+}
