@@ -1,0 +1,9 @@
+[submodule "SmartCCTV"]
+	path = SmartCCTV
+	url = https://github.com/NACXA0/SmartCCTV.git
+[submodule "SmartCenter"]
+	path = SmartCenter
+	url = https://github.com/NACXA0/SmartCenter.git
+[submodule "LOBN_FireClassroom"]
+	path = LOBN_FireClassroom
+	url = https://github.com/NACXA0/LOBN_FireClassroom.git
