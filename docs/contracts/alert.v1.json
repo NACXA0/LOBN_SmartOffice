@@ -1,0 +1,13 @@
+{
+  "schema": "alert.v1",
+  "alert_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "code": "pir_periodic",
+  "severity": "warning",
+  "source": "center",
+  "sensor": "pir",
+  "summary": "人体红外近似周期触发，已停止用其唤醒（疑似日光/热源）",
+  "state": "suppressed",
+  "handled_by": "center",
+  "detail": {},
+  "ts": 1732435200.0
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "esp.sense.v1",
+  "event_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "kind": "pir",
+  "edge": "rise",
+  "temperature_c": null,
+  "humidity_pct": null,
+  "ts": 1732435200.0,
+  "device": {
+    "dht": true,
+    "pir": true,
+    "button": true
+  }
+}

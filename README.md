@@ -10,7 +10,8 @@
 |------|----------|------|
 | [SmartCenter](https://github.com/NACXA0/SmartCenter) | `NACXA0/SmartCenter` | 中央总控：HA + **custom_components/lobn_office**（不改主干，可 uv 升级） |
 | [SmartCCTV](https://github.com/NACXA0/SmartCCTV) | `NACXA0/SmartCCTV` | 内网监控：只上报事件，**本地不执行开门**（`center_only`） |
-| [LOBN_FireClassroom](https://github.com/NACXA0/LOBN_FireClassroom) | `NACXA0/LOBN_FireClassroom` | 小程序 + [server](LOBN_FireClassroom/server/) + [admin](LOBN_FireClassroom/admin/)；公网 `fireclassroom.aleedu.com` |
+| [LOBN_FireClassroom](https://github.com/NACXA0/LOBN_FireClassroom) | `NACXA0/LOBN_FireClassroom` | [miniprogram_wechat](LOBN_FireClassroom/miniprogram_wechat/) + [backend](LOBN_FireClassroom/backend/) + [frontend_admin](LOBN_FireClassroom/frontend_admin/)；公网 `fireclassroom.aleedu.com` |
+| [SmartCenter/firmware/esp32s3_door](SmartCenter/firmware/esp32s3_door/) | （随 SmartCenter） | ESP32-S3 + W5500 门禁：只听总控 `door.command.v1`；可选 DHT11 / PIR / 按钮上报 |
 
 ## SmartCenter 与 HA 升级
 
@@ -23,23 +24,28 @@
 
 ## 快速入口
 
-三端统一 `./START.sh`（启动 / 运维 / 环境检测，选中后清屏刷新）：
+根目录编排本地全栈开发测试：
 
 ```bash
-cd SmartCenter && ./START.sh                # 启动→开发=前台 HA；导出 center.zip（无独立 Vite）
-cd LOBN_FireClassroom && ./START.sh         # 启动→开发=Vite+API；编译/导出 backend+frontend.zip
-cd SmartCCTV && ./START.sh                  # 启动→开发=Vite+API；编译/导出；Docker 可选
+./START.sh                # 菜单：启动三端 / 状态 / 环境检测·修复·全部测试 / submodule
+./START.sh test --yes     # 一键跑 SmartCenter + FireClassroom + SmartCCTV 单测
+./START.sh repair --yes   # 三端环境修复
 ```
 
-小程序仍用微信开发者工具打开 `LOBN_FireClassroom/`。
+单端仍用各自 `./START.sh`（启动 / 运维 / 环境，选中后清屏刷新）：
+
+```bash
+cd SmartCenter && ./START.sh                # 启动→开发=前台 HA；导出 center.zip
+cd LOBN_FireClassroom && ./START.sh         # 启动→开发=Vite+API；编译/导出生产包
+cd SmartCCTV && ./START.sh                  # 启动→开发=Vite+API；编译/导出；Docker 可选
+# 门禁固件：SmartCenter/firmware/esp32s3_door（config.example.h → config.h 后 pio upload）
+```
+
+小程序用微信开发者工具打开 `LOBN_FireClassroom/miniprogram_wechat/`。总控门禁适配器选 `esp`，填 ESP 根地址与 Bearer token。
 
 验收：[docs/验收清单.md](docs/验收清单.md) · 密钥：[docs/部署与密钥.md](docs/部署与密钥.md)
 
 
 
 
-https://github.com/NACXA0/SmartCenter
-
-一次开门都进入了那些人：门开启状态持续采集经过门的人脸
-门一直开怎么办？
 
