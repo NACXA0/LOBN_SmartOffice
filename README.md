@@ -24,10 +24,12 @@
 三端统一 `./START.sh`（启动 / 运维 / 环境检测，选中后清屏刷新）：
 
 ```bash
-cd SmartCenter && ./START.sh                # HA 总控；repair --yes 后 start
-cd LOBN_FireClassroom && ./START.sh         # 转调 server/；小程序用微信开发者工具开本目录
-cd SmartCCTV && ./START.sh                  # 终端或 Docker；配置 center.events_url 后上报总控
+cd SmartCenter && ./START.sh                # 启动→开发=前台 HA；导出 center.zip（无独立 Vite）
+cd LOBN_FireClassroom && ./START.sh         # 启动→开发=Vite+API；编译/导出 backend+frontend.zip
+cd SmartCCTV && ./START.sh                  # 启动→开发=Vite+API；编译/导出；Docker 可选
 ```
+
+小程序仍用微信开发者工具打开 `LOBN_FireClassroom/`。
 
 验收：[docs/验收清单.md](docs/验收清单.md) · 密钥：[docs/部署与密钥.md](docs/部署与密钥.md)
 
