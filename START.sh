@@ -210,10 +210,12 @@ cmd_help() {
   启动   后台启动三端 / 停止三端 / 进入各端子菜单
   运维   状态 / 帮助
   环境   环境检测 / 环境修复 / 全部自动化测试 / 同步 submodule
+  开发   消防教室数据架构检测 / 注入示例 / 重建库
 
 子命令:
   diagnose | repair | test | submodules
   start | stop | status
+  db-check | db-fix | db-seed | db-rebuild
   center | classroom | cctv   （进入对应 ./START.sh 交互菜单）
   help
 
@@ -303,6 +305,31 @@ EOF
   done
 }
 
+menu_dev() {
+  while true; do
+    clear_screen
+    cat <<EOF
+智慧办公室 · 开发（消防教室数据）
+  1) 数据架构检测
+  2) 修复数据结构（两次确认）
+  3) 注入示例数据（二次确认）
+  4) 重建数据库（三次确认，清空）
+  5) 进入 FireClassroom 完整菜单
+  0) 返回上级
+EOF
+    read -r -p "> " c
+    case "$c" in
+      1) run_action "数据架构检测" run_child "$FC" db-check ;;
+      2) run_action "修复数据结构" run_child "$FC" db-fix ;;
+      3) run_action "注入示例数据" run_child "$FC" db-seed ;;
+      4) run_action "重建数据库" run_child "$FC" db-rebuild ;;
+      5) clear_screen; (cd "$FC" && ./START.sh) || true ;;
+      0) return 0 ;;
+      *) ;;
+    esac
+  done
+}
+
 menu() {
   while true; do
     clear_screen
@@ -311,6 +338,7 @@ menu() {
   1) 启动
   2) 运维
   3) 环境检测
+  4) 开发
   0) 退出
 EOF
     read -r -p "> " choice
@@ -318,6 +346,7 @@ EOF
       1) menu_start ;;
       2) menu_ops ;;
       3) menu_env ;;
+      4) menu_dev ;;
       0) clear_screen; exit 0 ;;
       *) ;;
     esac
@@ -338,6 +367,7 @@ main() {
     center|smartcenter) (cd "$SC" && exec ./START.sh "${@:2}") ;;
     classroom|fireclassroom|fc) (cd "$FC" && exec ./START.sh "${@:2}") ;;
     cctv|smartcctv) (cd "$CCTV" && exec ./START.sh "${@:2}") ;;
+    db-check|db-fix|db-seed|db-rebuild) run_child "$FC" "$cmd" ;;
     help|-h|--help) cmd_help ;;
     *) echo "未知: $cmd"; cmd_help; exit 1 ;;
   esac
