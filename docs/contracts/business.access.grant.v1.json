@@ -1,0 +1,15 @@
+{
+  "schema": "business.access.grant.v1",
+  "door": "front",
+  "ttl_sec": 60,
+  "reason": "coach_verified",
+  "subject": {
+    "display_name": "张教练",
+    "user_id": "u_1001",
+    "frigate_face_name": "Zhang_Coach"
+  },
+  "frigate_event_id": "1607123955.475377-mxklsc",
+  "command_id": "cmd_01HXYZ",
+  "ts": "2026-11-25T12:00:00Z",
+  "note": "MQTT topic business/access/grant — not a relay pulse; HA automation publishes home/<door>/command"
+}

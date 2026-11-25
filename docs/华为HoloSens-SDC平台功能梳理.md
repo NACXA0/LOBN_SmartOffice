@@ -2,7 +2,7 @@
 
 > 来源：内网设备 Web 管理台 `https://192.168.1.125`（浏览器实地抓取）  
 > 设备：`D2150-10-I-P(3.6mm)` · 固件 `SDC 8.2.0.SPC139` · 登录用户 `admin`  
-> 用途：对照学习成熟 IPC/SDC 后台能力；本仓库监控已改为 HAOS+Frigate，本篇主要反哺总控/运维体验设计（非对接说明书）
+> 用途：对照学习成熟 IPC/SDC 后台能力。监控终态为 HAOS+Frigate+analytics-sidecar（见 [架构-HAOS四App.md](架构-HAOS四App.md)）；本篇主要反哺运维体验与 HA 仪表盘设计（非对接说明书）
 
 ---
 
