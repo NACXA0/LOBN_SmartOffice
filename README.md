@@ -2,13 +2,15 @@
 
 职责：云端管交易、总控管放行、监控管感知、继电器只听总控。契约见 [docs/接口契约.md](docs/接口契约.md)。
 
-## 子项目
+## 子仓库（git submodule）
 
-| 目录 | 角色 | 状态 |
-|------|------|------|
-| [SmartCenter](SmartCenter/) | 中央总控：Home Assistant + **custom_components/lobn_office**（不改 HA 主干，可 uv 升级） | 配置流 / 单测通过 |
-| [SmartCCTV](SmartCCTV/) | 内网监控：只上报事件，**本地不执行开门** | adapter=`center_only` |
-| [LOBN_FireClassroom](LOBN_FireClassroom/) | 小程序 + [server](LOBN_FireClassroom/server/) + [admin](LOBN_FireClassroom/admin/) | 预约/营销/授权发件箱；公网 `fireclassroom.aleedu.com` |
+克隆主仓后执行：`git submodule update --init --recursive`
+
+| 目录 | 远程仓库 | 角色 |
+|------|----------|------|
+| [SmartCenter](https://github.com/NACXA0/SmartCenter) | `NACXA0/SmartCenter` | 中央总控：HA + **custom_components/lobn_office**（不改主干，可 uv 升级） |
+| [SmartCCTV](https://github.com/NACXA0/SmartCCTV) | `NACXA0/SmartCCTV` | 内网监控：只上报事件，**本地不执行开门**（`center_only`） |
+| [LOBN_FireClassroom](https://github.com/NACXA0/LOBN_FireClassroom) | `NACXA0/LOBN_FireClassroom` | 小程序 + [server](LOBN_FireClassroom/server/) + [admin](LOBN_FireClassroom/admin/)；公网 `fireclassroom.aleedu.com` |
 
 ## SmartCenter 与 HA 升级
 

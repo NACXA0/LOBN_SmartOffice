@@ -1,0 +1,13 @@
+{
+  "folders": [
+    { "name": "LOBN_SmartOffice（主仓）", "path": "." },
+    { "name": "SmartCenter", "path": "SmartCenter" },
+    { "name": "SmartCCTV", "path": "SmartCCTV" },
+    { "name": "LOBN_FireClassroom", "path": "LOBN_FireClassroom" }
+  ],
+  "settings": {
+    "git.detectSubmodules": true,
+    "git.detectSubmodulesLimit": 20,
+    "git.autoRepositoryDetection": true
+  }
+}
