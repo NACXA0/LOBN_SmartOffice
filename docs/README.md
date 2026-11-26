@@ -3,6 +3,7 @@
 | 文档 | 内容 |
 |------|------|
 | [架构-HAOS四App.md](架构-HAOS四App.md) | **现行终态架构**（一句话、部署图、MQTT、链路、sidecar、铁律） |
+| [资产防盗-RFID.md](资产防盗-RFID.md) | RFID 通道防盗：仅 SmartCenter；ESPHome + HA 白名单；与 FireClassroom 解耦 |
 | [阶段1-HAOS底座验收.md](阶段1-HAOS底座验收.md) | **当前店内下一步**：Mosquitto + Frigate + MQTT `frigate/events` |
 | [接口契约.md](接口契约.md) | v2 总线契约；§9 历史 HTTP/HMAC |
 | [决策-归档自研SmartCCTV.md](决策-归档自研SmartCCTV.md) | 为何去掉自研 CCTV |

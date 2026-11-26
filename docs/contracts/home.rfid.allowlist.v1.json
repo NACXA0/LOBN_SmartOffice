@@ -1,0 +1,10 @@
+{
+  "schema": "home.rfid.allowlist.v1",
+  "room": "classroom_1",
+  "tags": [
+    "E280116060000204A1B2C3D4",
+    "E280116060000204AABBCCDD"
+  ],
+  "rev": 3,
+  "ts": 1732598300.0
+}

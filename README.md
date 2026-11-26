@@ -14,7 +14,7 @@ git submodule update --init --recursive
 
 | 目录 | 远程 | 角色 |
 |------|------|------|
-| [SmartCenter](https://github.com/NACXA0/SmartCenter) | `NACXA0/SmartCenter` | HAOS 配置 +（过渡期）`lobn_office`；目标含保命自动化、iframe、addons/sidecar 脚手架 |
+| [SmartCenter](https://github.com/NACXA0/SmartCenter) | `NACXA0/SmartCenter` | HAOS 配置 + ESPHome 教室总控（门/RFID/DHT）+（过渡期）`lobn_office`；保命自动化、iframe、addons/sidecar 脚手架 |
 | [LOBN_FireClassroom](https://github.com/NACXA0/LOBN_FireClassroom) | `NACXA0/LOBN_FireClassroom` | 小程序 + 云端 FastAPI + 管理后台；`fireclassroom.aleedu.com` |
 | [SmartCenter/firmware](SmartCenter/firmware/esp32s3_door/) | （随 SmartCenter） | 旧 HTTP 门固件；**迁移目标 ESPHome**（见架构文档） |
 

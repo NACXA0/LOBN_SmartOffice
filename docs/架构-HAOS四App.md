@@ -33,7 +33,7 @@
 ┌──────────────────────────────┴────────────────────────┐
 │ 硬件层（各自直连管理节点，不经「总控 HTTP」中转）        │
 │  RTSP 摄像头×N ──→ ③ Frigate / go2rtc                 │
-│  ESP32 门禁板  ──→ ESPHome 固件（板上自治）→ MQTT      │
+│  ESP32 教室总控──→ ESPHome（门/RFID/DHT/警号）→ MQTT │
 │  Zigbee 门磁等 ──→ HA (ZHA 等) → 实体                 │
 └─────────────────────────────────────────────────────────┘
                                ↑ 云端（VPS，不在 Supervisor 内）
@@ -56,9 +56,11 @@
 | **④ analytics-sidecar** | 订阅感知与状态；分析；开门决策发 `business/access/grant`；指标发 `business/analytics/#`；审计 SQLite；看板 :8080 | 不直连摄像头；不直接拉继电器；不进 HA Python 进程 |
 | **HACS Frigate Integration** | 把 Frigate MQTT/API 译成 HA 实体，供仪表盘与保命自动化引用 | 不替代 sidecar 做业务决策 |
 | **云端 FastAPI** | 交易、排班权威数据、推送、报表、签名下载链 | 不发门脉冲；不存店内录像主副本 |
-| **ESPHome 门板** | 订 `home/*/command`，脉冲继电器；上报 state / sense 到 MQTT | 不接受非总线私有 HTTP 开门（废弃旧 `door.command.v1` 直连形态） |
+| **ESPHome 教室总控** | 订 `home/*/command` / `…/rfid/allowlist`；脉冲门与警号；上报门 state、sense、RFID event、温湿度 | 不接受非总线私有 HTTP 开门；不编辑白名单；不连预约平台 |
+| **RFID 资产防盗** | 整段在 SmartCenter：ESP 本地比对 + HA 名单/通知 | **不进** LOBN_FireClassroom；sidecar **不在**报警关键路径 |
 
-原则沉淀：**感知在 Frigate，智能在 sidecar，保命与设备在 HA，交易在云端，执行在 ESPHome。**
+原则沉淀：**感知在 Frigate，智能在 sidecar，保命与设备在 HA，交易在云端，执行在 ESPHome。**  
+资产防盗专文：[资产防盗-RFID.md](资产防盗-RFID.md)。
 
 ---
 
@@ -82,6 +84,8 @@
 | `home/<door>/command` | HA 保命自动化 → ESPHome | 如 `OPEN` + ttl / command_id |
 | `home/<door>/state` | ESPHome / 门磁 → 总线 | open/closed、来源 |
 | `home/<door>/sense`（可选） | ESPHome → 总线 | pir/button 边沿（替代旧 HTTP sense） |
+| `home/<room>/rfid/event` | ESPHome → 总线 | 通道读到标签：`tag_id`、`allowed`、`gate`、`ts`（见 `home.rfid.event.v1`） |
+| `home/<room>/rfid/allowlist` | HA → ESPHome（**retained**） | 允许过通道的标签列表（见 `home.rfid.allowlist.v1`） |
 | `business/access/grant` | sidecar → 总线 | `{door, ttl, reason, subject, ts, …}` **不是**直接脉冲 |
 | `business/access/deny`（可选） | sidecar → 总线 | 审计用拒绝原因 |
 | `business/analytics/<room>` | sidecar → 总线 | `{avg, peak, ts, …}` 利用率等 |

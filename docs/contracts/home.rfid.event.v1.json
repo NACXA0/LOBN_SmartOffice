@@ -1,0 +1,10 @@
+{
+  "schema": "home.rfid.event.v1",
+  "event_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "room": "classroom_1",
+  "gate": "exit",
+  "tag_id": "E280116060000204A1B2C3D4",
+  "allowed": false,
+  "transport": "rs485",
+  "ts": 1732598400.0
+}
