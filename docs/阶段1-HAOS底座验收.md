@@ -1,8 +1,8 @@
 # 阶段①：HAOS 底座验收（Mosquitto + Frigate）
 
-> 依据：[架构-HAOS四App.md](架构-HAOS四App.md) §六。  
+> 依据：[架构-HAOS四App.md](架构-HAOS四App.md) §六 · 全文部署：[部署体系.md](部署体系.md)。  
 > **完成标准**：预览 / 录像可用，且 MQTT 上能看到 `frigate/events`（有人走过时）。  
-> 本阶段**不**装 analytics-sidecar，**不**写排班/开门决策，**不**恢复 SmartCCTV。
+> 本阶段**不**装 SmartCenter Add-on，**不**写开门决策，**不**恢复 SmartCCTV。Frigate **关闭** Face Recognition。
 
 本机 Cursor 无法代替店内 N100 操作；请在 **HAOS 主机**上按下列清单勾选。
 
@@ -77,16 +77,17 @@ objects:
   track:
     - person
 
-# 人脸库可后开；阶段①只要 person 事件上总线即可
-# face_recognition:
-#   enabled: true
-#   model_size: small
+# 身份在 SmartCenter Add-on；阶段①起就关掉 Frigate 人脸
+face_recognition:
+  enabled: false
 ```
 
 纪律：
 
 - 摄像头 **只**被 go2rtc/Frigate 拉流（连接数 ≤2）
-- `config.yml` **不要**写「谁能进门」等业务规则
+- `config.yml` **不要**写「谁能进门」等业务规则；**不要**开 Face Recognition
+
+可选：HACS **Advanced Camera Card** 做 Lovelace 预览（与 Frigate Integration 配合）。
 
 ---
 
@@ -124,10 +125,11 @@ mosquitto_sub -h <haos-ip> -u <user> -P '<pass>' -t 'frigate/#' -v
 - [ ] Frigate 预览 + 录像可用  
 - [ ] go2rtc 拉流，摄像头侧连接数 ≤2  
 - [ ] HACS Frigate Integration 实体可见  
+- [ ] Frigate Face Recognition **已关闭**  
 - [ ] MQTT 上实测到 `frigate/events`（或等价 frigate 事件流）  
 
-通过后 → 下一轮才做：**阶段② ESPHome 保命开门** 与/或 **阶段③ sidecar 最小管道**（订 `frigate/#` → SQLite → `business/analytics/#`）。  
-**不要**先做阶段④（排班 join、`business/access/grant`）。
+通过后 → 下一轮：**阶段② ESPHome 保命开门**，再 **阶段③ SmartCenter Add-on 刷脸**（见 [部署体系.md](部署体系.md)）。  
+利用率/取证等扩展不阻塞刷脸上线。
 
 ---
 
@@ -135,7 +137,8 @@ mosquitto_sub -h <haos-ip> -u <user> -P '<pass>' -t 'frigate/#' -v
 
 | 物 | 路径 |
 |----|------|
+| 部署体系 | [部署体系.md](部署体系.md) |
 | 架构 | [架构-HAOS四App.md](架构-HAOS四App.md) |
-| 契约 | [接口契约.md](接口契约.md) |
+| Frigate 样例 | [examples/frigate.config.phase1.example.yml](examples/frigate.config.phase1.example.yml) |
 | 总验收 | [验收清单.md](验收清单.md) |
 | SmartCenter 开发 HA | `../SmartCenter/`（不能替代店内 Frigate） |

@@ -1,15 +1,16 @@
 {
   "schema": "business.access.grant.v1",
+  "node": "front_gate",
   "door": "front",
-  "ttl_sec": 60,
-  "reason": "coach_verified",
+  "ttl_sec": 3,
+  "reason": "face_match",
   "subject": {
-    "display_name": "张教练",
-    "user_id": "u_1001",
-    "frigate_face_name": "Zhang_Coach"
+    "user_id": "1001",
+    "display_name": "学员甲"
   },
   "frigate_event_id": "1607123955.475377-mxklsc",
   "command_id": "cmd_01HXYZ",
-  "ts": "2026-11-25T12:00:00Z",
-  "note": "MQTT topic business/access/grant — not a relay pulse; HA automation publishes home/<door>/command"
+  "expires_at": "2026-11-26T12:00:15Z",
+  "ts": "2026-11-26T12:00:00Z",
+  "note": "MQTT business/access/grant — not a relay pulse; HA publishes home/<node>/door/command"
 }

@@ -1,0 +1,52 @@
+# 刷脸开门阶段：复制到 Frigate config.yml 后改账号/IP/zone 坐标
+# 纪律：关 Face Recognition；门口 zone/相机名与 SmartCenter Add-on 选项一致
+# 部署全文：docs/部署体系.md §4 · 人脸：docs/人脸-SmartCenter-Add-on.md
+
+mqtt:
+  host: core-mosquitto
+  user: frigate
+  password: CHANGE_ME
+
+go2rtc:
+  streams:
+    front_desk:
+      - rtsp://user:pass@192.168.1.100:554/Streaming/Channels/101
+
+cameras:
+  front_desk:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_desk
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 30
+        mode: motion
+    zones:
+      # 名称须与 Add-on door_zones 一致
+      front_desk_zone:
+        coordinates: 0.1,0.1,0.9,0.1,0.9,0.9,0.1,0.9
+
+detectors:
+  coral:
+    type: edgetpu
+    device: usb
+
+objects:
+  track:
+    - person
+
+# 身份比对在 SmartCenter Add-on，禁止打开 Frigate 人脸库做开门
+face_recognition:
+  enabled: false
+
+version: 0.16-0

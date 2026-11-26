@@ -1,7 +1,8 @@
 # 最终程序架构：HAOS 四 App + MQTT 总线
 
-> 状态：**现行目标架构**（2026-11-25）  
-> 一句话：一台 HAOS 主机跑四个 Supervisor 托管的 App（HA 本体 + Mosquitto + Frigate Full Access + analytics-sidecar），一条 MQTT 总线串起来，一个 HACS 集成（Frigate Integration）做 HA 侧实体翻译，云端 FastAPI 做 M 端业务决策，所有硬件直连各自的管理节点（摄像头→Frigate，ESP 门禁板→ESPHome）。
+> 状态：**现行目标架构**（2026-11-26）  
+> 一句话：一台 HAOS 主机跑四个 Supervisor 托管的 App（HA 本体 + Mosquitto + Frigate Full Access + **SmartCenter Add-on**），一条 MQTT 总线串起来，一个 HACS 集成（Frigate Integration）做 HA 侧实体翻译，云端 FastAPI 做 M 端业务决策，所有硬件直连各自的管理节点（摄像头→Frigate，ESP 门禁板→ESPHome）。  
+> **人脸**：Frigate 关 Face Recognition；交互式采集、人脸库治理、门口比对、概览/审计工作台见 [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md)。本机开发：[开发工作流.md](开发工作流.md)。
 
 自研 [SmartCCTV](决策-归档自研SmartCCTV.md) 已裁定归档，不进入本架构。
 
@@ -20,14 +21,14 @@
 │   ├── 自动化×N（零智能）                                 ├── 检测(Coral+ONNX+zone)│
 │   └── 侧边栏 iframe ×2                                   ├── 录像→数据盘(如30天) │
 │       ├→ Frigate Web :5000                              └── SQLite 事件库      │
-│       └→ sidecar 看板 :8080                                                     │
+│       └→ SmartCenter Add-on Ingress（采集/人员）                                 │
 │                                                                                │
-│ ④ analytics-sidecar（本地 App · 本项目「智能」唯一住处）                          │
-│    ├── MQTT 订阅: frigate/#、home/#、business/#（按需）                           │
-│    ├── Frigate REST（查询型）: /api/events、latest.jpg                            │
-│    ├── 分析: 滞留 / 到岗 / 轨迹 / 热力                                            │
-│    ├── SQLite 自持库（指标 / 审计）                                               │
-│    └── FastAPI :8080 看板 + webhook                                              │
+│ ④ SmartCenter Add-on（本地 App · 「智能」唯一住处；人脸控制面）                     │
+│    ├── Ingress 工作台（无自建登录）：概览 / 采集 / 人脸库 / 审计                    │
+│    ├── 人脸会话 + 本地底库（SQLite，向量不出店）+ 容量维护                           │
+│    ├── MQTT：订 frigate/# → 门口比对 → 发 business/access/grant                  │
+│    ├── go2rtc 查询型短窗拉流（仅门口有人时）                                       │
+│    └── 后续可扩展：利用率看板                                                      │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
                                │ MQTT（经路由器，可桥接）
 ┌──────────────────────────────┴────────────────────────┐
@@ -40,7 +41,7 @@
 ┌──────────────────────────────┴────────────────────────┐
 │ 云端 FastAPI（M 端 / LOBN_FireClassroom backend）       │
 │   排班 join、交易决策、推送、报表                       │
-│   └── 经 MQTT bridge 或 webhook 消费 sidecar 指标      │
+│   └── 人脸会话中继；经 MQTT bridge / webhook 消费指标   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -50,17 +51,17 @@
 
 | 组件 | 做什么 | 绝不做什么 |
 |------|--------|------------|
-| **① HA 本体** | 设备/实体中枢；保命自动化（监听 `business/access/grant` → 发 `home/*/command`）；侧边栏 iframe；MQTT / ZHA 等集成 | **零智能**：不写分析、排班 join、滞留判定、经营报表逻辑 |
+| **① HA 本体** | 设备/实体中枢；保命自动化（监听 `business/access/grant` → 发 `home/<node>/door/command`）；侧边栏 iframe；MQTT / ZHA 等集成 | **零智能**：不写分析、排班 join、滞留判定、经营报表逻辑 |
 | **② Mosquitto** | 唯一跨 App 事件/指令总线 | 不承载业务逻辑 |
-| **③ Frigate Full Access** | 拉流（go2rtc）、检测、zone、人脸库、录像、发 `frigate/#` | **零业务**：不判定「谁能进门」、不做利用率报表 |
-| **④ analytics-sidecar** | 订阅感知与状态；分析；开门决策发 `business/access/grant`；指标发 `business/analytics/#`；审计 SQLite；看板 :8080 | 不直连摄像头；不直接拉继电器；不进 HA Python 进程 |
-| **HACS Frigate Integration** | 把 Frigate MQTT/API 译成 HA 实体，供仪表盘与保命自动化引用 | 不替代 sidecar 做业务决策 |
-| **云端 FastAPI** | 交易、排班权威数据、推送、报表、签名下载链 | 不发门脉冲；不存店内录像主副本 |
-| **ESPHome 教室总控** | 订 `home/*/command` / `…/rfid/allowlist`；脉冲门与警号；上报门 state、sense、RFID event、温湿度 | 不接受非总线私有 HTTP 开门；不编辑白名单；不连预约平台 |
-| **RFID 资产防盗** | 整段在 SmartCenter：ESP 本地比对 + HA 名单/通知 | **不进** LOBN_FireClassroom；sidecar **不在**报警关键路径 |
+| **③ Frigate Full Access** | 拉流（go2rtc）、检测、zone、录像、发 `frigate/#`；**关闭 Face Recognition** | **零业务**：不做身份底库、不判定「谁能进门」 |
+| **④ SmartCenter Add-on** | 采集写库、人脸库治理、门口比对→`grant`、概览统计与审计；鉴权靠 HA Ingress | 不直连摄像头独占；不拉继电器；不进 HA 进程；无自建账号/RBAC |
+| **HACS Frigate Integration** | 把 Frigate MQTT/API 译成 HA 实体，供仪表盘与保命自动化引用 | 不替代 Add-on 做业务决策 |
+| **云端 FastAPI** | 交易、排班权威数据、推送、报表；人脸帧**中继**（不落长期照片） | 不发门脉冲；不存店内录像主副本；不存 embedding |
+| **ESPHome 教室总控** | 订 `home/<node>/door/command` / `…/rfid/allowlist`；脉冲门与警号；上报门 state、sense、RFID event、温湿度 | 不接受非总线私有 HTTP 开门；不编辑白名单；不连预约平台 |
+| **RFID 资产防盗** | 整段在 SmartCenter：ESP 本地比对 + HA 名单/通知 | **不进** LOBN_FireClassroom；Add-on **不在**报警关键路径 |
 
-原则沉淀：**感知在 Frigate，智能在 sidecar，保命与设备在 HA，交易在云端，执行在 ESPHome。**  
-资产防盗专文：[资产防盗-RFID.md](资产防盗-RFID.md)。
+原则沉淀：**感知在 Frigate，智能在 SmartCenter Add-on，保命与设备在 HA，交易在云端，执行在 ESPHome。**  
+人脸专文：[人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md) · 资产防盗：[资产防盗-RFID.md](资产防盗-RFID.md)。
 
 ---
 
@@ -70,9 +71,9 @@
 
 1. 硬件/感知状态上总线：`frigate/#`、`home/#`  
 2. 业务指标与业务指令上总线：`business/#`  
-3. 执行指令上总线：`home/<device>/command`（及对称的 `…/state`）  
+3. 执行指令上总线：`home/<node>/door/command`（及对称的 `…/door/state`；`<node>` = 教室总控 `room_id`）  
 4. **跨 App 通信只走 MQTT**；**禁止** App 间私下点对点长连接做事件/指令  
-5. **REST 仅查询型**：sidecar → Frigate `:5000`（事件列表、快照、导出目录只读挂载）
+5. **REST 仅查询型**：Add-on → go2rtc / Frigate（短窗帧、只读查询）
 
 ### 3.1 主题表（初版骨架）
 
@@ -80,16 +81,16 @@
 |------|------|----------|
 | `frigate/events` | Frigate → 总线 | 官方事件 JSON（new/update/end、label、zones、snapshot 等） |
 | `frigate/<camera>/person` 等 | Frigate → 总线 | 人数/对象计数类（以 Frigate 实际发布为准） |
-| `frigate/tracked_object_update` | Frigate → 总线 | 人脸 sub_label 等 enrich |
-| `home/<door>/command` | HA 保命自动化 → ESPHome | 如 `OPEN` + ttl / command_id |
-| `home/<door>/state` | ESPHome / 门磁 → 总线 | open/closed、来源 |
-| `home/<door>/sense`（可选） | ESPHome → 总线 | pir/button 边沿（替代旧 HTTP sense） |
-| `home/<room>/rfid/event` | ESPHome → 总线 | 通道读到标签：`tag_id`、`allowed`、`gate`、`ts`（见 `home.rfid.event.v1`） |
-| `home/<room>/rfid/allowlist` | HA → ESPHome（**retained**） | 允许过通道的标签列表（见 `home.rfid.allowlist.v1`） |
-| `business/access/grant` | sidecar → 总线 | `{door, ttl, reason, subject, ts, …}` **不是**直接脉冲 |
-| `business/access/deny`（可选） | sidecar → 总线 | 审计用拒绝原因 |
-| `business/analytics/<room>` | sidecar → 总线 | `{avg, peak, ts, …}` 利用率等 |
-| `business/notify/outbox`（可选） | sidecar → 总线 | 待推送摘要，由 HA/云端消费 |
+| `frigate/tracked_object_update` | Frigate → 总线 | （可选）对象 enrich；**不用** Frigate 人脸名做开门 |
+| `home/<node>/door/command` | HA / lobn_office → ESPHome | `home.door.command.v1` 或纯文本 `OPEN`；`<node>` 如 `classroom_1`、`front_gate` |
+| `home/<node>/door/state` | ESPHome / 门磁 → 总线 | `open` / `closed` |
+| `home/<node>/door/sense`（可选） | ESPHome → 总线 | pir/button 边沿（替代旧 HTTP sense） |
+| `home/<node>/rfid/event` | ESPHome → 总线 | 通道读到标签：`tag_id`、`allowed`、`gate`、`ts`（见 `home.rfid.event.v1`） |
+| `home/<node>/rfid/allowlist` | HA → ESPHome（**retained**） | 允许过通道的标签列表（见 `home.rfid.allowlist.v1`） |
+| `business/access/grant` | SmartCenter Add-on → 总线 | `{door, ttl, reason, subject, command_id, expires_at, …}` **不是**直接脉冲 |
+| `business/access/deny`（可选） | Add-on → 总线 | 审计用拒绝原因 |
+| `business/analytics/<room>` | Add-on（后续）→ 总线 | `{avg, peak, ts, …}` 利用率等 |
+| `business/notify/outbox`（可选） | Add-on → 总线 | 待推送摘要，由 HA/云端消费 |
 | `business/cloud/#`（可选） | 云端 bridge ↔ 店 | 排班缓存刷新、报表回执 |
 
 字段只增不改：正式 JSON 样例落在 `docs/contracts/`（新建 `business.access.grant.v1.json` 等时追加，不改旧 `smartcctv.*` 样义）。
@@ -98,108 +99,66 @@
 
 ## 四、核心数据流
 
-### 链路 A：老师到场 → 开门（最重业务链）
+### 链路 A：刷脸 → 开门（最重业务链）
 
-1. 摄像头 → go2rtc(Frigate) → 检测 known person（如「张教练」）在 `front_desk` zone  
+1. 摄像头 → go2rtc(Frigate) → 门口 zone 检出 `person`（不做 Frigate 人脸）  
 2. Frigate → MQTT `frigate/events`  
-3. sidecar 订阅 → 查排班（云端 FastAPI 或本地缓存）→ 判定合法  
-4. sidecar → MQTT `business/access/grant` `{door:front, ttl:60s, reason:coach_verified}`  
-5. HA 自动化监听 grant → 发布 `home/front_door/command` `OPEN`  
-6. ESPHome 收到 → 继电器脉冲 → 门磁回报 → `home/front_door/state`  
-7. sidecar 记审计（谁、何时、为什么、门是否开）
+3. SmartCenter Add-on 订事件 → go2rtc 短窗比对本地底库（冷却 / 多人同框 / 多帧一致）  
+4. 命中 → MQTT `business/access/grant`（`reason=face_match`，带 `command_id` / `expires_at`）  
+5. HA 自动化监听 grant → 发布 `home/<node>/door/command`  
+6. ESPHome 脉冲 → `home/<node>/door/state`  
+7. Add-on 记审计与机会式验证（`accepted`→`verified` 或退回 `pending`）
 
-### 链路 B：教室利用率（日常链）
+### 链路 B：教室利用率（后续扩展，不阻塞刷脸）
 
-1. `frigate/<classroom>/person` 等计数流 → sidecar 滑动窗口  
+1. `frigate/<classroom>/person` 等计数流 → Add-on 滑动窗口  
 2. 每 N 分钟 → `business/analytics/<room>` `{avg, peak, ts}`  
 3. HA MQTT 发现 → `sensor.*_utilization` 仪表盘  
 4. 云端订阅/拉取 → 时序 → 周月报
 
-### 链路 C：纠纷取证导出（低频高价值）
+### 链路 C：纠纷取证导出（后续扩展）
 
 1. 侧边栏 iframe → Frigate Web → Export  
-2. 片段落入 `/media/frigate/exports/`（sidecar `media:ro`）  
-3. sidecar 扫描 → rclone 加密上传 → 清理本地  
+2. 片段落入 `/media/frigate/exports/`（只读挂载）  
+3. 可选 rclone 加密上传 → 清理本地  
 4. 家长请求 → 云端生成带签名临时下载链
 
 ---
 
-## 五、analytics-sidecar 内部结构
+## 五、SmartCenter Add-on 内部结构
 
-仓库落点（实施时新建，本次仅定目录契约）：建议 `SmartCenter/addons/analytics_sidecar/` 或独立 submodule；**不**放进 HA `custom_components`。
+仓库落点：[SmartCenter/addon/](../SmartCenter/addon/)。**不**把人脸模型塞进 `custom_components`。
 
 ```text
-analytics-sidecar/
-├── config.yml              # Supervisor App 描述
-├── Dockerfile
-├── requirements.txt
+addon/
+├── config.yaml / Dockerfile / run.sh
+├── web/                    # Vite+React 源码（Radix / Lucide；Frigate 风格侧栏）
 ├── app/
-│   ├── main.py             # FastAPI + asyncio + MQTT
-│   ├── config.py           # Supervisor 注入环境变量
-│   ├── ingest/
-│   │   ├── mqtt_sub.py     # frigate/#、home/#、business/#
-│   │   └── frigate_api.py  # REST：/api/events、latest.jpg
-│   ├── analyzers/
-│   │   ├── occupancy.py
-│   │   ├── presence.py
-│   │   └── heatmap.py
-│   ├── decide/
-│   │   └── access.py       # → business/access/grant
-│   ├── sinks/
-│   │   └── mqtt_pub.py
-│   ├── store/
-│   │   ├── sqlite.py
-│   │   └── retention.py    # 如 72h 滚动
-│   ├── api/
-│   │   ├── board.py
-│   │   └── healthz.py
-│   └── webui/
+│   ├── main.py             # API + Ingress 静态
+│   ├── face/               # 会话、质量门控、门口比对
+│   ├── store.py            # SQLite 底库 / 审计 / 统计
+│   ├── maintenance.py      # 长时间运行：裁剪 / 孤儿帧 / 会话 TTL
+│   ├── mqtt_bus.py
+│   └── webui/              # 构建产物（HashRouter，base ./）
 └── tests/
 ```
 
-### `config.yml` 骨架
-
-```yaml
-name: Analytics Sidecar
-version: "0.1.0"
-slug: analytics_sidecar
-description: 教室视频事件智能分析（滞留/到岗/热力/门禁决策）
-arch: [amd64]
-startup: services
-services:
-  - mqtt:need
-build: false
-image: local/analytics-sidecar
-map:
-  - media:ro
-ports:
-  8080/tcp: 8080
-options:
-  frigate_host: "ccab4aaf-frigate-fa"
-  school_id: 1
-  retention_hours: 72
-  analytics_interval_min: 5
-schema:
-  frigate_host: str
-  school_id: int
-  retention_hours: int
-  analytics_interval_min: int
-```
-
-**选型**：FastAPI（单循环 MQTT + REST + 定时）+ paho-mqtt + SQLite。零 HA Python API 依赖；迁独立 Docker 宿主只改地址。
+**选型**：FastAPI + aiomqtt + SQLite（WAL）+ 工作台 SPA。嵌入可插拔（开发 Mock；生产 ONNX）。零 HA Python 依赖即可迁独立宿主。  
+**工作台四页**：概览 · 采集 · 人脸库 · 审计（门口比对全自动、无操作页）。  
+**鉴权**：仅 HA Ingress；Add-on 不做登录 UI。
 
 ---
 
 ## 六、实施顺序（四阶段）
 
-纪律：阶段③先打通「事件流 → 指标 → 看板」最小管道，再加算法与开门决策。
+纪律：先保命与感知，再刷脸 Add-on；利用率/取证不阻塞刷脸上线。步骤见 [部署体系.md](部署体系.md)。
 
 | 阶段 | 内容 | 完成标准 |
 |------|------|----------|
-| **① 底座** | HAOS + Mosquitto + Frigate Full Access + Coral；摄像头经 go2rtc；HACS Frigate Integration；侧边栏 iframe→Frigate | 预览/录像/zone 事件上 `frigate/#` |
-| **② 执行层** | ESPHome 门板 + 门磁；HA 保命自动化：手动/授权类 `command`；**不含**教练识别决策 | 无 sidecar 也能钥匙/店员路径开门 |
-| **③ sidecar 管道** | 本地 App 骨架；订 `frigate/#`；写 SQLite；`business/analytics/#`；看板 iframe :8080 | 利用率指标进 HA sensor |
-| **④ 智能与云** | presence/access 决策；云端排班 join；取证 rclone；废弃旧 CCTV HMAC / HTTP 门协议 | 链路 A/B/C 验收通过 |
+| **① 底座** | HAOS + Mosquitto + Frigate Full Access + Coral；关 Face Recognition；HACS Frigate Integration | 预览/录像/zone 事件上 `frigate/#` |
+| **② 执行层** | ESPHome 教室总控 + 门磁；HA `door_mqtt`；可选 RFID | 无 Add-on 也能钥匙/店员路径开门 |
+| **③ SmartCenter Add-on** | Ingress 工作台；底库；门口比对→grant；容量维护；`face_grant_mqtt`；`/data` 备份 | 刷脸可开；工作台可用；边界单测通过 |
+| **④ 扩展** | 利用率看板、排班 join、取证 rclone | 不阻塞刷脸上线 |
 
 ---
 
@@ -209,22 +168,22 @@ schema:
 |----|------------|------|
 | **保命层**（ESPHome + HA 基础自动化 + 物理钥匙并联） | 店可降级营业 | HAOS Supervisor 快照；ESPHome 固件仓 |
 | **感知层**（Frigate） | 无人脸自动放行；利用率停；预约/手动开门仍可走保命路径 | Frigate config + 录像盘；Coral 驱动 |
-| **智能层**（sidecar） | 无自动 grant / 无经营指标；保命层不受影响 | sidecar 镜像 + SQLite 卷；可空跑 |
+| **智能层**（SmartCenter Add-on） | 无人脸自动开门；保命层不受影响 | Add-on 镜像 + `/data`（库+合格帧）备份 |
 | **云端** | 新单/排班同步受影响；店内已缓存策略可短时继续 | VPS 备份；店不依赖云发脉冲 |
 
 **容错本质**：智能层全挂 → 降级运行，不停摆。
 
-Supervisor 备份范围：HA 配置、Mosquitto、Frigate、sidecar 选项与数据盘策略（录像保留天数与导出目录）。
+Supervisor 备份范围：HA 配置、Mosquitto、Frigate、Add-on `/data` 与选项、录像盘策略。
 
 ---
 
 ## 八、五条架构铁律
 
 1. **HA 零智能**：只做设备翻译与保命自动化；分析/决策不进 HA 进程。  
-2. **Frigate 零业务**：只做检测/录像/事件；「谁能进、是否滞留」在 sidecar。  
-3. **总线即宪法**：跨 App 事件与指令只走 MQTT；REST 仅查询。  
+2. **Frigate 零业务 / 零人脸库**：只做检测/录像/事件；身份与开门判定在 SmartCenter Add-on。  
+3. **总线即宪法**：跨 App 事件与指令只走 MQTT；REST 仅查询（含 go2rtc 短窗）。  
 4. **摄像头单连接**：视频消费经 go2rtc；摄像头侧连接数 ≤2。  
-5. **可迁移性**：sidecar 零 HA API 依赖；换宿主只改地址。
+5. **可迁移性**：Add-on 可迁独立宿主；换嵌入模型靠 `model_version` + 本地合格帧重嵌。
 
 ---
 
@@ -232,11 +191,11 @@ Supervisor 备份范围：HA 配置、Mosquitto、Frigate、sidecar 选项与数
 
 | 旧 | 新 |
 |----|----|
-| 自研 SmartCCTV FastAPI :8300 | Frigate Full Access + sidecar :8080 |
+| 自研 SmartCCTV FastAPI :8300 | Frigate + SmartCenter Add-on（Ingress） |
+| Frigate Face Recognition | **关闭**；Add-on 交互式底库 |
 | HMAC A/C + `smartcctv.event.v1` HTTP | MQTT `frigate/#` + `business/#` |
-| `door.command.v1` HTTP → 自研 ESP 固件 | `home/*/command` → ESPHome |
-| `lobn_office` 内做人脸热路径开门决策 | sidecar 发 grant；HA 只翻译成 command |
-| `cctv.lobn` | 取消；Frigate / sidecar 走 HAOS 内网名 |
+| `door.command.v1` HTTP → 自研 ESP 固件 | `home/<node>/door/command` → ESPHome |
+| `lobn_office` 内做人脸热路径 | Add-on 发 grant；HA 只翻译成 command |
 
 旧契约样例保留在 [contracts/](contracts/)，标注历史，见 [接口契约.md](接口契约.md)。
 
@@ -244,4 +203,4 @@ Supervisor 备份范围：HA 配置、Mosquitto、Frigate、sidecar 选项与数
 
 ## 十、一句话总结
 
-完整程序架构：一台 HAOS，Supervisor 托管四个 App——HA（设备中枢+保命）、Mosquitto（唯一总线）、Frigate Full Access（视频中枢，go2rtc 独占摄像头）、analytics-sidecar（全项目唯一智能代码住处）；HACS Frigate 集成做实体翻译；MQTT 分 `frigate/#` / `home/#` / `business/#`；三条核心链（到场开门、利用率、取证）经总线串联；智能层挂掉时保命层仍转；五条铁律护栏长期演进。
+完整程序架构：一台 HAOS，Supervisor 托管四个 App——HA（设备中枢+保命）、Mosquitto（唯一总线）、Frigate Full Access（视频中枢，关人脸库）、SmartCenter Add-on（人脸控制面：采集/库/比对/统计）；HACS Frigate 集成做实体翻译；MQTT 分 `frigate/#` / `home/#` / `business/#`；刷脸链路经总线串联；智能层挂掉时保命层仍转。

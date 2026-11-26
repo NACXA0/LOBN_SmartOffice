@@ -36,4 +36,4 @@ home/<room>/rfid/event ──→ HA 自动化（通知 / 消警）
 ```
 
 主题与 JSON 样例：[接口契约.md](接口契约.md) §4.7、[contracts/](contracts/)。  
-节点与配置落点：[SmartCenter/esphome/](../SmartCenter/esphome/)、[SmartCenter/config/packages/rfid_asset_guard.yaml](../SmartCenter/config/packages/rfid_asset_guard.yaml)。
+节点与配置落点：[SmartCenter/firmware/esphome/](../SmartCenter/firmware/esphome/)、[SmartCenter/config/packages/rfid_asset_guard.yaml](../SmartCenter/config/packages/rfid_asset_guard.yaml)。

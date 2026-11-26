@@ -1,0 +1,7 @@
+{
+  "schema": "home.door.command.v1",
+  "action": "OPEN",
+  "ttl_sec": 3,
+  "command_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ts": 1732598400.0
+}

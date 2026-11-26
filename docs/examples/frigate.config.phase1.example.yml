@@ -44,4 +44,9 @@ objects:
   track:
     - person
 
+# 阶段①即可关掉；刷脸阶段也必须保持关闭（身份在 SmartCenter Add-on）
+face_recognition:
+  enabled: false
+
 version: 0.16-0
+

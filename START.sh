@@ -8,7 +8,8 @@ cd "$ROOT"
 
 SC="$ROOT/SmartCenter"
 FC="$ROOT/LOBN_FireClassroom"
-FW="$SC/firmware/esp32s3_door"
+FW="$SC/firmware/esphome"
+FW_LEGACY="$SC/firmware/esp32s3_door"
 YES=0
 CI=0
 
@@ -87,10 +88,13 @@ cmd_diagnose() {
       echo "[FAIL] 缺 $name（先 submodule update）"; fail=1
     fi
   done
-  if [[ -d "$FW" ]]; then
-    echo "[OK] 门禁固件(旧 HTTP) $FW → 迁移目标 ESPHome"
+  if [[ -d "$FW" && -f "$FW/START.sh" ]]; then
+    echo "[OK] 生产固件 ESPHome $FW"
   else
-    echo "[WARN] 无 SmartCenter/firmware/esp32s3_door"
+    echo "[WARN] 无 SmartCenter/firmware/esphome"
+  fi
+  if [[ -d "$FW_LEGACY" ]]; then
+    echo "[OK] 遗留 HTTP 固件 $FW_LEGACY（勿新部署）"
   fi
   [[ -f "$ROOT/docs/架构-HAOS四App.md" ]] && echo "[OK] docs/架构-HAOS四App.md" || echo "[WARN] 无架构文档"
   [[ -f "$ROOT/docs/阶段1-HAOS底座验收.md" ]] && echo "[OK] docs/阶段1-HAOS底座验收.md" || echo "[WARN] 无阶段1验收"
@@ -211,7 +215,8 @@ cmd_help() {
   help
 
 单端: cd SmartCenter|LOBN_FireClassroom && ./START.sh
-门禁: 生产 ESPHome；旧固件 SmartCenter/firmware/esp32s3_door/
+固件: cd SmartCenter/firmware/esphome && ./START.sh（Device Builder）
+遗留: SmartCenter/firmware/esp32s3_door/（HTTP，勿新部署）
 EOF
 }
 
