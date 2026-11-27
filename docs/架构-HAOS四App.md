@@ -127,7 +127,7 @@
 
 ## 五、SmartCenter Add-on 内部结构
 
-仓库落点：[SmartCenter/addon/](../SmartCenter/addon/)。**不**把人脸模型塞进 `custom_components`。
+仓库落点：[addon/](../addon/)。**不**把人脸模型塞进 `custom_components`。
 
 ```text
 addon/

@@ -141,4 +141,4 @@ mosquitto_sub -h <haos-ip> -u <user> -P '<pass>' -t 'frigate/#' -v
 | 架构 | [架构-HAOS四App.md](架构-HAOS四App.md) |
 | Frigate 样例 | [examples/frigate.config.phase1.example.yml](examples/frigate.config.phase1.example.yml) |
 | 总验收 | [验收清单.md](验收清单.md) |
-| SmartCenter 开发 HA | `../SmartCenter/`（不能替代店内 Frigate） |
+| 本机开发 HA | 仓库根 `config/`（`./START.sh all`；不能替代店内 Frigate） |

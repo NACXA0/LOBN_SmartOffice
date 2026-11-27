@@ -1,7 +1,7 @@
 # 资产防盗（RFID）— SmartCenter 专属
 
 > 状态：**现行边界**（2026-11-26）  
-> 一句话：RFID 资产防盗整段留在 SmartCenter；与 LOBN_FireClassroom（预约 / 交易 / 小程序）**无耦合**。
+> 一句话：RFID 资产防盗整段留在店内平台（本仓根 `firmware/` + `config/`）；与 LOBN_FireClassroom（预约 / 交易 / 小程序）**无耦合**。
 
 ## 归属
 
@@ -36,4 +36,4 @@ home/<room>/rfid/event ──→ HA 自动化（通知 / 消警）
 ```
 
 主题与 JSON 样例：[接口契约.md](接口契约.md) §4.7、[contracts/](contracts/)。  
-节点与配置落点：[SmartCenter/firmware/esphome/](../SmartCenter/firmware/esphome/)、[SmartCenter/config/packages/rfid_asset_guard.yaml](../SmartCenter/config/packages/rfid_asset_guard.yaml)。
+节点与配置落点：[firmware/esphome/](../firmware/esphome/)、[config/packages/rfid_asset_guard.yaml](../config/packages/rfid_asset_guard.yaml)。

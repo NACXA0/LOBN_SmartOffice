@@ -1,0 +1,66 @@
+# 门禁执行：订 home/<node>/door/command，按 ttl_sec 脉冲继电器；上报 state
+
+globals:
+  - id: door_pulse_ms
+    type: int
+    initial_value: "3000"
+
+switch:
+  - platform: gpio
+    id: door_relay
+    name: "Door relay"
+    pin: ${pin_door_relay}
+    restore_mode: ALWAYS_OFF
+    internal: true
+
+binary_sensor:
+  - platform: gpio
+    id: door_contact
+    name: "Door contact"
+    pin:
+      number: ${pin_door_contact}
+      mode: INPUT_PULLUP
+      inverted: true
+    device_class: door
+    on_press:
+      - mqtt.publish:
+          topic: home/${room_id}/door/state
+          payload: "open"
+    on_release:
+      - mqtt.publish:
+          topic: home/${room_id}/door/state
+          payload: "closed"
+
+script:
+  - id: door_open_pulse
+    mode: single
+    then:
+      - switch.turn_on: door_relay
+      - delay: !lambda "return id(door_pulse_ms);"
+      - switch.turn_off: door_relay
+
+mqtt:
+  on_message:
+    - topic: home/${room_id}/door/command
+      then:
+        - lambda: |-
+            const std::string p = x;
+            bool open = (p == "OPEN");
+            int ttl_sec = 3;
+            if (!open && p.size() > 0 && p[0] == '{') {
+              open = p.find("\"OPEN\"") != std::string::npos
+                  || p.find("\"action\":\"OPEN\"") != std::string::npos
+                  || p.find("\"action\": \"OPEN\"") != std::string::npos;
+              size_t k = p.find("\"ttl_sec\"");
+              if (k != std::string::npos) {
+                size_t colon = p.find(':', k);
+                if (colon != std::string::npos) {
+                  int v = atoi(p.c_str() + colon + 1);
+                  if (v >= 1 && v <= 10) ttl_sec = v;
+                }
+              }
+            }
+            if (open) {
+              id(door_pulse_ms) = ttl_sec * 1000;
+              id(door_open_pulse)->execute();
+            }

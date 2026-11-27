@@ -14,7 +14,7 @@
 ## 开发（推荐本机 · 热更新）
 
 ```bash
-cd SmartCenter
+# 在仓库根
 ./START.sh repair --yes && ./START.sh addon-repair   # 首次
 ./START.sh all                                        # Vite :5173 + API :8080 + HA :8123
 ```
@@ -44,7 +44,7 @@ cd SmartCenter
 - [ ] Face Recognition **关**  
 - [ ] 记下 Frigate 主机名、门口相机/zone  
 
-### 2. 同步 `SmartCenter/config/`
+### 2. 同步 `config/`
 
 | 路径 | 作用 |
 |------|------|
@@ -58,7 +58,7 @@ cd SmartCenter
 
 ### 3. 安装 Add-on
 
-`SmartCenter/addon/` → 本地附加组件（[repository.yaml](../SmartCenter/addon/repository.yaml)）。  
+`addon/` → 本地附加组件（仓库根 [repository.yaml](../repository.yaml)）。  
 Docker 多阶段会构建 `web/` → `app/webui`。  
 选项改 Frigate URL、`door_cameras` / `door_zones`、云端 HMAC、容量相关项（见 [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md)）。  
 `run.sh` 从 Supervisor 注入 MQTT。  

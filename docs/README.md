@@ -22,6 +22,8 @@
 | [contracts/](contracts/) | JSON 样例（含历史 `smartcctv.*`） |
 | [决策-归档自研SmartCCTV.md](决策-归档自研SmartCCTV.md) | 为何去掉自研 CCTV |
 | [归档-SmartCCTV准备清单.md](归档-SmartCCTV准备清单.md) | 删除状态 |
+| [决策-归档SmartCenter子模块.md](决策-归档SmartCenter子模块.md) | 为何把店内平台升到父仓根 |
+| [归档-SmartCenter准备清单.md](归档-SmartCenter准备清单.md) | 子模块手动归档步骤 |
 
 ## 部署与运维
 
@@ -69,9 +71,9 @@
 
 | 路径 | 说明 |
 |------|------|
-| [../SmartCenter/README.md](../SmartCenter/README.md) | 店内 HA 配置仓总览 |
-| [../SmartCenter/docs/部署说明.md](../SmartCenter/docs/部署说明.md) | SmartCenter 侧部署摘要 |
-| [../SmartCenter/addon/README.md](../SmartCenter/addon/README.md) | Add-on 本地命令 |
-| [../SmartCenter/addon/web/README.md](../SmartCenter/addon/web/README.md) | 工作台前端（Vite） |
-| [../SmartCenter/firmware/esphome/README.md](../SmartCenter/firmware/esphome/README.md) | 教室总控固件 |
+| [部署说明.md](部署说明.md) | 店内平台部署摘要（原 SmartCenter 侧） |
+| [../addon/README.md](../addon/README.md) | Add-on 本地命令 |
+| [../addon/web/README.md](../addon/web/README.md) | 工作台前端（Vite） |
+| [../firmware/esphome/README.md](../firmware/esphome/README.md) | 教室总控固件 |
 | [../LOBN_FireClassroom/README.md](../LOBN_FireClassroom/README.md) | 云端 / 小程序 / 管理端总览 |
+| [归档-SmartCenter准备清单.md](归档-SmartCenter准备清单.md) | 旧子模块手动归档步骤（未勾选项由你执行） |

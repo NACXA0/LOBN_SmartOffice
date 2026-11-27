@@ -100,11 +100,11 @@ Add-on = **本店人脸控制面**（采集写库、库治理、门口仲裁、�
 
 | 路径 | 说明 |
 |------|------|
-| `SmartCenter/addon/` | Supervisor Add-on（Ingress + MQTT + FastAPI） |
-| `SmartCenter/addon/web/` | 工作台源码 |
-| `SmartCenter/addon/app/webui/` | 构建产物 |
-| `SmartCenter/config/packages/face_grant_mqtt.yaml` | grant → 门脉冲 |
+| `addon/` | Supervisor Add-on（Ingress + MQTT + FastAPI） |
+| `addon/web/` | 工作台源码 |
+| `addon/app/webui/` | 构建产物 |
+| `config/packages/face_grant_mqtt.yaml` | grant → 门脉冲 |
 | `LOBN_FireClassroom/backend/.../face.py` | 会话中继 + `face_status` 回写 + 学员搜索 |
 | `docs/examples/frigate.config.face-door.example.yml` | Frigate 门口 zone 样例 |
 
-本地单测：`cd SmartCenter && ./START.sh addon-test`（或 `addon && .venv/bin/pytest -q`）。
+本地单测：仓库根 `./START.sh addon-test`（或 `cd addon && .venv/bin/pytest -q`）。
