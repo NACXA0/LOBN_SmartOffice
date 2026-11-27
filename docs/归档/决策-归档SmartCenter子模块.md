@@ -19,7 +19,7 @@
 | GitHub `NACXA0/SmartCenter` | **Archived**（只读历史） |
 | `LOBN_FireClassroom` | **仍为子模块**（云端业务，独立发版） |
 
-产品名「SmartCenter Add-on」保留（Supervisor 侧边栏 / Ingress 标题）；归档的是**子模块仓库布局**，不是 Add-on 本身。
+归档的是**子模块仓库布局**，不是 Add-on 本身。面板产品名现为 **SmartOffice**（slug `smartoffice`）；「SmartCenter」仅指本归档仓库的历史名称。
 
 ---
 

@@ -1,4 +1,4 @@
-# SmartCenter Add-on → business/access/grant → 脉冲开门
+# SmartOffice → business/access/grant → 脉冲开门
 # 过期或重复 command_id 不脉冲。店员手动开门仍走 door_mqtt.yaml。
 
 input_text:

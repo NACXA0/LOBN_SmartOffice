@@ -205,6 +205,30 @@ class CloudClient:
             _LOGGER.exception("拉取站点配置失败")
             return {}
 
+    async def push_door_sighting(self, *, user_id: int | str, target: str = "inner") -> bool:
+        """上报门口识别目击（AND 模式点按前使用）。"""
+        if not self.base_url or not self.secret:
+            return False
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            return False
+        if uid < 1:
+            return False
+        path = "/internal/door/sighting"
+        body = json.dumps(
+            {"user_id": uid, "target": target if target in ("gate", "inner") else "inner"},
+            ensure_ascii=False,
+        ).encode()
+        headers = self._headers("POST", path, body)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(f"{self.base_url}{path}", headers=headers, content=body)
+            return resp.status_code < 300
+        except Exception:
+            _LOGGER.exception("上报门口目击失败 user=%s target=%s", user_id, target)
+            return False
+
     async def push_alert(self, alert: AlertRecord) -> bool:
         if not self.base_url or not self.secret:
             return False

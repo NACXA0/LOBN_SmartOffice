@@ -1,8 +1,8 @@
 # 最终程序架构：HAOS 四 App + MQTT 总线
 
 > 状态：**现行目标架构**（2026-11-26）  
-> 一句话：一台 HAOS 主机跑四个 Supervisor 托管的 App（HA 本体 + Mosquitto + Frigate Full Access + **SmartCenter Add-on**），一条 MQTT 总线串起来，一个 HACS 集成（Frigate Integration）做 HA 侧实体翻译，云端 FastAPI 做 M 端业务决策，所有硬件直连各自的管理节点（摄像头→Frigate，ESP 门禁板→ESPHome）。  
-> **人脸**：Frigate 关 Face Recognition；交互式采集、人脸库治理、门口比对、概览/审计工作台见 [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md)。本机开发：[开发工作流.md](开发工作流.md)。
+> 一句话：一台 HAOS 主机跑四个 Supervisor 托管的 App（HA 本体 + Mosquitto + Frigate Full Access + **SmartOffice**），一条 MQTT 总线串起来，一个 HACS 集成（Frigate Integration）做 HA 侧实体翻译，云端 FastAPI 做 M 端业务决策，所有硬件直连各自的管理节点（摄像头→Frigate，ESP 门禁板→ESPHome）。  
+> **人员 / 刷脸**：Frigate 关 Face Recognition；人员凭证、门口比对、开门仲裁、工作台见 [SmartOffice.md](SmartOffice.md)。本机开发：[开发工作流.md](开发工作流.md)。
 
 自研 [SmartCCTV](归档/决策-归档自研SmartCCTV.md) 已裁定归档，不进入本架构。
 
@@ -21,14 +21,14 @@
 │   ├── 自动化×N（零智能）                                 ├── 检测(Coral+ONNX+zone)│
 │   └── 侧边栏 iframe ×2                                   ├── 录像→数据盘(如30天) │
 │       ├→ Frigate Web :5000                              └── SQLite 事件库      │
-│       └→ SmartCenter Add-on Ingress（采集/人员）                                 │
+│       └→ SmartOffice Ingress（采集/人员）                                 │
 │                                                                                │
-│ ④ SmartCenter Add-on（本地 App · 「智能」唯一住处；人脸控制面）                     │
-│    ├── Ingress 工作台（无自建登录）：概览 / 采集 / 人脸库 / 审计                    │
-│    ├── 人脸会话 + 本地底库（SQLite，向量不出店）+ 容量维护                           │
-│    ├── MQTT：订 frigate/# → 门口比对 → 发 business/access/grant                  │
-│    ├── go2rtc 查询型短窗拉流（仅门口有人时）                                       │
-│    └── 后续可扩展：利用率看板                                                      │
+│ ④ SmartOffice（本地 App · 办公室总管；判断唯一住处）                               │
+│    ├── Ingress 工作台：总览 / 空间 / 人员 / 记录（助理抽屉）                        │
+│    ├── 人员凭证 + 空间/围栏/布防 + 资产台账 + 策略窗口 + 告警总线                   │
+│    ├── MQTT：检测/门磁/RFID → 判断 → grant / analytics / environment / arm       │
+│    ├── go2rtc 取帧（人体检测与门口比对；不拉第二路 RTSP）                           │
+│    └── 在线 AI 可选（解释脸/转写/助理）；不进开门热路径                             │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
                                │ MQTT（经路由器，可桥接）
 ┌──────────────────────────────┴────────────────────────┐
@@ -53,15 +53,15 @@
 |------|--------|------------|
 | **① HA 本体** | 设备/实体中枢；保命自动化（监听 `business/access/grant` → 发 `home/<node>/door/command`）；侧边栏 iframe；MQTT / ZHA 等集成 | **零智能**：不写分析、排班 join、滞留判定、经营报表逻辑 |
 | **② Mosquitto** | 唯一跨 App 事件/指令总线 | 不承载业务逻辑 |
-| **③ Frigate Full Access** | 拉流（go2rtc）、检测、zone、录像、发 `frigate/#`；**关闭 Face Recognition** | **零业务**：不做身份底库、不判定「谁能进门」 |
-| **④ SmartCenter Add-on** | 采集写库、人脸库治理、门口比对→`grant`、概览统计与审计；鉴权靠 HA Ingress | 不直连摄像头独占；不拉继电器；不进 HA 进程；无自建账号/RBAC |
+| **③ Frigate Full Access** | 拉流（go2rtc）、录像、回放；**关闭 Face Recognition** | **零业务**：不做身份底库、不判定「谁能进门」；检测权威逐步由 SmartOffice 自有检测接管 |
+| **④ SmartOffice** | 办公室总管：人员/空间/资产/布防/策略窗口/告警/环境意图/问询；唯一发 grant；鉴权靠 HA Ingress | 不直连摄像头独占；不拉继电器；不进 HA 进程；无自建账号/RBAC；在线 AI 不进开门热路径 |
 | **HACS Frigate Integration** | 把 Frigate MQTT/API 译成 HA 实体，供仪表盘与保命自动化引用 | 不替代 Add-on 做业务决策 |
-| **云端 FastAPI** | 交易、排班权威数据、推送、报表；人脸帧**中继**（不落长期照片） | 不发门脉冲；不存店内录像主副本；不存 embedding |
+| **云端 FastAPI** | 交易、排班权威数据、推送、报表；人脸帧**中继**（不落长期照片）；向总管交出策略窗口 | 不发门脉冲；不存店内录像主副本；不存 embedding |
 | **ESPHome 教室总控** | 订 `home/<node>/door/command` / `…/rfid/allowlist`；脉冲门与警号；上报门 state、sense、RFID event、温湿度 | 不接受非总线私有 HTTP 开门；不编辑白名单；不连预约平台 |
-| **RFID 资产防盗** | 整段在 SmartCenter：ESP 本地比对 + HA 名单/通知 | **不进** LOBN_FireClassroom；Add-on **不在**报警关键路径 |
+| **RFID 资产防盗** | ESP 本地比对+警号；白名单由 SmartOffice 台账 retained 发布；事件进总管告警 | **不进** FireClassroom；警号不依赖 Add-on |
 
-原则沉淀：**感知在 Frigate，智能在 SmartCenter Add-on，保命与设备在 HA，交易在云端，执行在 ESPHome。**  
-人脸专文：[人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md) · 资产防盗：[资产防盗-RFID.md](资产防盗-RFID.md)。
+原则沉淀：**录像在 Frigate，判断在 SmartOffice，保命与设备在 HA，交易在云端，执行在 ESPHome。**  
+总管专文：[SmartOffice.md](SmartOffice.md) · 资产防盗：[资产防盗-RFID.md](资产防盗-RFID.md)。
 
 ---
 
@@ -86,12 +86,14 @@
 | `home/<node>/door/state` | ESPHome / 门磁 → 总线 | `open` / `closed` |
 | `home/<node>/door/sense`（可选） | ESPHome → 总线 | pir/button 边沿（替代旧 HTTP sense） |
 | `home/<node>/rfid/event` | ESPHome → 总线 | 通道读到标签：`tag_id`、`allowed`、`gate`、`ts`（见 `home.rfid.event.v1`） |
-| `home/<node>/rfid/allowlist` | HA → ESPHome（**retained**） | 允许过通道的标签列表（见 `home.rfid.allowlist.v1`） |
-| `business/access/grant` | SmartCenter Add-on → 总线 | `{door, ttl, reason, subject, command_id, expires_at, …}` **不是**直接脉冲 |
+| `home/<node>/rfid/allowlist` | SmartOffice → ESPHome（**retained**） | 台账生成的允许标签（见 `home.rfid.allowlist.v1`）；空名单须显式指令 |
+| `business/access/grant` | SmartOffice → 总线 | `{door, ttl, reason, subject, command_id, expires_at, …}` **不是**直接脉冲 |
 | `business/access/deny`（可选） | Add-on → 总线 | 审计用拒绝原因 |
-| `business/analytics/<room>` | Add-on（后续）→ 总线 | `{avg, peak, ts, …}` 利用率等 |
+| `business/analytics/<space>` | SmartOffice → 总线 | `{avg, peak, ts, window_min}` 空间人数 |
+| `business/security/arm/<space>` | SmartOffice → 总线（retained） | 布防状态 |
+| `business/environment/<space>` | SmartOffice → 总线 | 环境意图（灯/空调/新风期望）；HA 翻译执行 |
 | `business/notify/outbox`（可选） | Add-on → 总线 | 待推送摘要，由 HA/云端消费 |
-| `business/cloud/#`（可选） | 云端 bridge ↔ 店 | 排班缓存刷新、报表回执 |
+| `business/cloud/#`（可选） | 云端 bridge ↔ 店 | 策略窗口刷新、报表回执 |
 
 字段只增不改：正式 JSON 样例落在 `docs/contracts/`（新建 `business.access.grant.v1.json` 等时追加，不改旧 `smartcctv.*` 样义）。
 
@@ -99,22 +101,20 @@
 
 ## 四、核心数据流
 
-### 链路 A：刷脸 → 开门（最重业务链）
+### 链路 A：放行 → 开门
 
-1. 摄像头 → go2rtc(Frigate) → 门口 zone 检出 `person`（不做 Frigate 人脸）  
-2. Frigate → MQTT `frigate/events`  
-3. SmartCenter Add-on 订事件 → go2rtc 短窗比对本地底库（冷却 / 多人同框 / 多帧一致）  
-4. 命中 → MQTT `business/access/grant`（`reason=face_match`，带 `command_id` / `expires_at`）  
-5. HA 自动化监听 grant → 发布 `home/<node>/door/command`  
-6. ESPHome 脉冲 → `home/<node>/door/state`  
-7. Add-on 记审计与机会式验证（`accepted`→`verified` 或退回 `pending`）
+1. 摄像头 → go2rtc 取帧 → SmartOffice 自有人体检测（过渡期仍可订 `frigate/events`）  
+2. 门口围栏内人体 → 比对本地底库（冷却 / 多帧一致）或策略窗口 / 店员手动  
+3. 仲裁器 → MQTT `business/access/grant`（`reason=face_match|schedule|staff_manual`）  
+4. HA 自动化监听 grant → 发布 `home/<node>/door/command`  
+5. ESPHome 脉冲 → `home/<node>/door/state`；总管消费边沿做门告警  
+6. 审计入 `access_ledger`；在线 AI 从不参与本链
 
-### 链路 B：教室利用率（后续扩展，不阻塞刷脸）
+### 链路 B：空间人数 / 滞留
 
-1. `frigate/<classroom>/person` 等计数流 → Add-on 滑动窗口  
-2. 每 N 分钟 → `business/analytics/<room>` `{avg, peak, ts}`  
-3. HA MQTT 发现 → `sensor.*_utilization` 仪表盘  
-4. 云端订阅/拉取 → 时序 → 周月报
+1. 空间围栏内人体滑动窗口 → `business/analytics/<space>`  
+2. 空间应为空（布防或窗口结束过宽限）仍有人 → 统一告警总线（锁存）  
+3. HA 只显示 sensor；不写滞留逻辑
 
 ### 链路 C：纠纷取证导出（后续扩展）
 
@@ -125,7 +125,7 @@
 
 ---
 
-## 五、SmartCenter Add-on 内部结构
+## 五、SmartOffice 内部结构
 
 仓库落点：[addon/](../addon/)。**不**把人脸模型塞进 `custom_components`。
 
@@ -144,7 +144,7 @@ addon/
 ```
 
 **选型**：FastAPI + aiomqtt + SQLite（WAL）+ 工作台 SPA。嵌入可插拔（开发 Mock；生产 ONNX）。零 HA Python 依赖即可迁独立宿主。  
-**工作台四页**：概览 · 采集 · 人脸库 · 审计（门口比对全自动、无操作页）。  
+**工作台四页**：总览 · 人员 · 审计（门口比对全自动、无操作页）。  
 **鉴权**：仅 HA Ingress；Add-on 不做登录 UI。
 
 ---
@@ -157,7 +157,7 @@ addon/
 |------|------|----------|
 | **① 底座** | HAOS + Mosquitto + Frigate Full Access + Coral；关 Face Recognition；HACS Frigate Integration | 预览/录像/zone 事件上 `frigate/#` |
 | **② 执行层** | ESPHome 教室总控 + 门磁；HA `door_mqtt`；可选 RFID | 无 Add-on 也能钥匙/店员路径开门 |
-| **③ SmartCenter Add-on** | Ingress 工作台；底库；门口比对→grant；容量维护；`face_grant_mqtt`；`/data` 备份 | 刷脸可开；工作台可用；边界单测通过 |
+| **③ SmartOffice** | Ingress 工作台；底库；门口比对→grant；容量维护；`face_grant_mqtt`；`/data` 备份 | 刷脸可开；工作台可用；边界单测通过 |
 | **④ 扩展** | 利用率看板、排班 join、取证 rclone | 不阻塞刷脸上线 |
 
 ---
@@ -168,7 +168,7 @@ addon/
 |----|------------|------|
 | **保命层**（ESPHome + HA 基础自动化 + 物理钥匙并联） | 店可降级营业 | HAOS Supervisor 快照；ESPHome 固件仓 |
 | **感知层**（Frigate） | 无人脸自动放行；利用率停；预约/手动开门仍可走保命路径 | Frigate config + 录像盘；Coral 驱动 |
-| **智能层**（SmartCenter Add-on） | 无人脸自动开门；保命层不受影响 | Add-on 镜像 + `/data`（库+合格帧）备份 |
+| **智能层**（SmartOffice） | 无人脸自动开门；保命层不受影响 | Add-on 镜像 + `/data`（库+合格帧）备份 |
 | **云端** | 新单/排班同步受影响；店内已缓存策略可短时继续 | VPS 备份；店不依赖云发脉冲 |
 
 **容错本质**：智能层全挂 → 降级运行，不停摆。
@@ -177,13 +177,14 @@ Supervisor 备份范围：HA 配置、Mosquitto、Frigate、Add-on `/data` 与�
 
 ---
 
-## 八、五条架构铁律
+## 八、架构铁律
 
 1. **HA 零智能**：只做设备翻译与保命自动化；分析/决策不进 HA 进程。  
-2. **Frigate 零业务 / 零人脸库**：只做检测/录像/事件；身份与开门判定在 SmartCenter Add-on。  
-3. **总线即宪法**：跨 App 事件与指令只走 MQTT；REST 仅查询（含 go2rtc 短窗）。  
-4. **摄像头单连接**：视频消费经 go2rtc；摄像头侧连接数 ≤2。  
-5. **可迁移性**：Add-on 可迁独立宿主；换嵌入模型靠 `model_version` + 本地合格帧重嵌。
+2. **Frigate 管录像与 go2rtc**：身份、进门、在场、告警由 SmartOffice 判断；在线 AI 不在放行热路径上。  
+3. **总线即宪法**：跨 App 事件与指令只走 MQTT；REST 仅查询（含 go2rtc 取帧）。  
+4. **摄像头单连接**：视频消费经 go2rtc；摄像头侧连接数 ≤2；不拉第二路 RTSP。  
+5. **可迁移性**：Add-on 可迁独立宿主；换嵌入模型靠 `model_version` + 本地合格帧重嵌。  
+6. **RFID 警号自主**：ESP 按最后一份白名单本地比对拉警；总管挂了铃照样响。白名单由总管台账发布。
 
 ---
 
@@ -191,7 +192,7 @@ Supervisor 备份范围：HA 配置、Mosquitto、Frigate、Add-on `/data` 与�
 
 | 旧 | 新 |
 |----|----|
-| 自研 SmartCCTV FastAPI :8300 | Frigate + SmartCenter Add-on（Ingress） |
+| 自研 SmartCCTV FastAPI :8300 | Frigate + SmartOffice（Ingress） |
 | Frigate Face Recognition | **关闭**；Add-on 交互式底库 |
 | HMAC A/C + `smartcctv.event.v1` HTTP | MQTT `frigate/#` + `business/#` |
 | `door.command.v1` HTTP → 自研 ESP 固件 | `home/<node>/door/command` → ESPHome |
@@ -203,4 +204,4 @@ Supervisor 备份范围：HA 配置、Mosquitto、Frigate、Add-on `/data` 与�
 
 ## 十、一句话总结
 
-完整程序架构：一台 HAOS，Supervisor 托管四个 App——HA（设备中枢+保命）、Mosquitto（唯一总线）、Frigate Full Access（视频中枢，关人脸库）、SmartCenter Add-on（人脸控制面：采集/库/比对/统计）；HACS Frigate 集成做实体翻译；MQTT 分 `frigate/#` / `home/#` / `business/#`；刷脸链路经总线串联；智能层挂掉时保命层仍转。
+完整程序架构：一台 HAOS，Supervisor 托管四个 App——HA（设备中枢+保命）、Mosquitto（唯一总线）、Frigate Full Access（视频中枢，关人脸库）、SmartOffice（店内策略 sidecar：采集/库/比对/统计）；HACS Frigate 集成做实体翻译；MQTT 分 `frigate/#` / `home/#` / `business/#`；刷脸链路经总线串联；智能层挂掉时保命层仍转。

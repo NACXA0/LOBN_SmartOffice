@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import time
-import uuid
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from .embedder import Embedder, cosine
 from .quality import QualityConfig, evaluate_meta
+from ..access.arbiter import AccessRequest
 from ..store import GalleryStore
 
 
@@ -24,11 +24,11 @@ class MatchConfig:
 
 @dataclass
 class MatchResult:
-    decision: str  # grant | deny | skip
+    decision: str  # request | deny | skip
     reason: str
     user_id: str | None = None
     similarity: float = 0.0
-    grant: dict | None = None
+    request: AccessRequest | None = None
 
 
 class DoorMatcher:
@@ -59,7 +59,6 @@ class DoorMatcher:
         last = self._recent_events.get(ek, 0)
         if event_id and now - last < 2.0:
             return False, "dedup"
-        # 同摄像头短时去重
         cam_last = self._recent_events.get(f"{camera}:*", 0)
         if now - cam_last < 1.0:
             return False, "dedup"
@@ -85,7 +84,6 @@ class DoorMatcher:
             per_frame: list[tuple[str, float]] = []
             for img in frames_bgr:
                 if img.ndim == 2 or (img.ndim == 3 and abs(float(img[..., 0].mean() - img[..., 2].mean())) < 1.5):
-                    # 红外/灰度：拒识
                     self.store.audit(None, camera, 0.0, "skip", {"reason": "infrared_or_gray"})
                     return MatchResult("skip", "infrared_or_gray")
                 vec, meta = self.embedder.embed(img)
@@ -109,16 +107,12 @@ class DoorMatcher:
                 self.store.audit(None, camera, 0.0, "deny", {"reason": "not_enough_frames", "n": len(per_frame)})
                 return MatchResult("deny", "not_enough_frames")
 
-            # 多人同框：本窗所有检出身份必须是在册且一致集合内全部匹配
             ids = {u for u, s in per_frame if u != "?"}
             if any(u == "?" for u, _ in per_frame):
                 self.store.audit(None, camera, 0.0, "deny", {"reason": "unknown_in_frame"})
                 return MatchResult("deny", "unknown_in_frame")
-            # 多帧一致性：连续帧同一主身份
             main = per_frame[0][0]
             if any(u != main for u, _ in per_frame):
-                # 若是多人且全部在册——计划写死「全部匹配才开」：多人不同 id 且都在册则拒开更安全？
-                # 计划：每张脸都匹配到在册才开。这里简化为：多帧须同一人（单人通行）。多人不同 id 拒开。
                 self.store.audit(None, camera, 0.0, "deny", {"reason": "multi_identity", "ids": list(ids)})
                 return MatchResult("deny", "multi_identity")
 
@@ -128,39 +122,30 @@ class DoorMatcher:
                 self.store.audit(main, camera, avg_sim, "skip", {"reason": "cooldown"})
                 return MatchResult("skip", "cooldown", user_id=main, similarity=avg_sim)
 
-            # 机会式验证记账
             verify_ok = avg_sim >= self.cfg.verify_threshold
             new_status = self.store.bump_verify(main, verify_ok)
             if new_status == "pending":
                 self.store.audit(main, camera, avg_sim, "deny", {"reason": "recollect_required"})
                 return MatchResult("deny", "recollect_required", user_id=main, similarity=avg_sim)
 
-            command_id = uuid.uuid4().hex
-            if not self.store.mark_grant(command_id):
-                return MatchResult("deny", "duplicate_command")
-
+            # 同人冷却：消化重复申请，不占仲裁器
             until_mono = time.monotonic() + self.cfg.cooldown_sec
             self.store.set_cooldown(main, until_mono, time.time() + self.cfg.cooldown_sec)
             self._miss_streak[camera] = 0
 
             person = self.store.get_person(main)
-            grant = {
-                "schema": "business.access.grant.v1",
-                "node": self.cfg.door_node,
-                "door": self.cfg.door_node,
-                "ttl_sec": 3,
-                "reason": "face_match",
-                "subject": {
-                    "user_id": main,
-                    "display_name": person.display_name if person else main,
-                },
-                "frigate_event_id": event_id,
-                "command_id": command_id,
-                "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 15)),
-                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-            self.store.audit(main, camera, avg_sim, "grant", {"command_id": command_id, "status": new_status})
-            return MatchResult("grant", "face_match", user_id=main, similarity=avg_sim, grant=grant)
+            req = AccessRequest(
+                source="face_match",
+                user_id=main,
+                display_name=person.display_name if person else main,
+                door=self.cfg.door_node,
+                similarity=avg_sim,
+                camera=camera,
+                frigate_event_id=event_id,
+                detail={"status": new_status},
+            )
+            self.store.audit(main, camera, avg_sim, "request", {"status": new_status})
+            return MatchResult("request", "face_match", user_id=main, similarity=avg_sim, request=req)
         finally:
             self._busy_cameras.discard(camera)
 
@@ -171,7 +156,6 @@ class DoorMatcher:
         dead = [k for k, ts in self._recent_events.items() if ts < cutoff]
         for k in dead:
             self._recent_events.pop(k, None)
-        # 静音窗口过期后可清
         for cam, until in list(self._silent_until.items()):
             if until < now:
                 self._silent_until.pop(cam, None)

@@ -1,3 +1,3 @@
-"""SmartCenter HA Add-on：人脸采集、底库、门口比对。"""
+"""SmartOffice HA Add-on：人员凭证、开门仲裁、Ingress 工作台。"""
 
 __version__ = "0.1.0"

@@ -1,7 +1,7 @@
-name: SmartCenter
-version: "0.2.0"
-slug: smartcenter
-description: 交互式人脸采集、本地底库与刷脸开门决策（发 business/access/grant）
+name: SmartOffice
+version: "0.4.0"
+slug: smartoffice
+description: 办公室总管 — 人员/空间/资产/放行/告警/问询（发 business/access/grant）
 url: https://github.com/NACXA0/LOBN_SmartOffice
 arch:
   - amd64
@@ -11,8 +11,8 @@ boot: auto
 init: false
 ingress: true
 ingress_port: 8080
-panel_icon: mdi:face-recognition
-panel_title: SmartCenter
+panel_icon: mdi:office-building
+panel_title: SmartOffice
 hassio_api: true
 hassio_role: default
 auth_api: true
@@ -24,7 +24,7 @@ map:
 ports:
   8080/tcp: 8080
 ports_description:
-  8080/tcp: SmartCenter API / 采集页（一般用 Ingress，可不暴露）
+  8080/tcp: SmartOffice API / 工作台（一般用 Ingress，可不暴露）
 options:
   school_id: 1
   door_cameras:
@@ -53,6 +53,13 @@ options:
   log_max_mb: 5
   log_backup_count: 5
   match_concurrency: 1
+  ai_base_url: ""
+  ai_api_key: ""
+  ai_model: gpt-4o-mini
+  ai_per_minute: 6
+  ai_per_day: 200
+  # hog=OpenCV HOG 行人检测（成熟开源算法）；mock=开发桩；onnx/companion=后续
+  detector: hog
 schema:
   school_id: int
   door_cameras:
@@ -80,3 +87,9 @@ schema:
   log_max_mb: int
   log_backup_count: int
   match_concurrency: int
+  ai_base_url: str
+  ai_api_key: password
+  ai_model: str
+  ai_per_minute: int
+  ai_per_day: int
+  detector: list(mock|hog|opencv|onnx|companion)

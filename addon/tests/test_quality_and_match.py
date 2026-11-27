@@ -106,7 +106,8 @@ def test_match_grant_cooldown_and_duplicate(store: GalleryStore, tmp_path: Path)
     ok, _ = matcher.should_handle("front_desk", ["z1"], "e1")
     assert ok
     r = matcher.match_frames("front_desk", frames, event_id="e1")
-    assert r.decision == "grant" and r.grant and r.user_id == "42"
+    assert r.decision == "request" and r.request and r.user_id == "42"
+    assert r.request.source == "face_match"
     # 冷却
     r2 = matcher.match_frames("front_desk", frames, event_id="e2")
     assert r2.decision == "skip" and r2.reason == "cooldown"

@@ -36,6 +36,9 @@ class AccessPolicy:
     # 云端站点配置：人脸仅在有效预约窗口内自动开门（可选便利）
     face_auto_open: bool = True
     require_grant_for_face: bool = True
+    # 每扇门策略：gate/inner → {tap, sense, op, face_pulses, face_records_only, ...}
+    door_policy: dict[str, Any] = field(default_factory=dict)
+    face_target: str = "inner"  # 识别默认作用门
     _pending_face_grant: dict[str, float] = field(default_factory=dict)
     _unknown_cooldown: dict[str, float] = field(default_factory=dict)
     _close_report_task: asyncio.Task | None = field(default=None, repr=False)
@@ -43,6 +46,48 @@ class AccessPolicy:
     def apply_site_settings(self, settings: dict) -> None:
         if "face_auto_open" in settings:
             self.face_auto_open = bool(settings["face_auto_open"])
+        policy = settings.get("door_policy") if isinstance(settings, dict) else None
+        if isinstance(policy, dict):
+            self.door_policy = {
+                "gate": dict(policy.get("gate") or {}),
+                "inner": dict(policy.get("inner") or {}),
+            }
+        else:
+            # 兼容：仅全站 face_auto_open
+            self.door_policy = {
+                "gate": {
+                    "exists": True,
+                    "tap": True,
+                    "sense": False,
+                    "face_pulses": False,
+                    "face_records_only": False,
+                },
+                "inner": {
+                    "exists": True,
+                    "tap": False,
+                    "sense": bool(self.face_auto_open),
+                    "face_pulses": bool(self.face_auto_open),
+                    "face_records_only": False,
+                },
+            }
+        # 识别默认门：优先里门有 sense，否则大门
+        inner = self.door_policy.get("inner") or {}
+        gate = self.door_policy.get("gate") or {}
+        if inner.get("sense"):
+            self.face_target = "inner"
+        elif gate.get("sense"):
+            self.face_target = "gate"
+        else:
+            self.face_target = "inner"
+        # 合成旧开关：任一扇 face_pulses 为真才允许人脸脉冲路径
+        self.face_auto_open = bool(gate.get("face_pulses") or inner.get("face_pulses"))
+
+    def _door_cfg_for_face(self, event: CctvEvent) -> dict[str, Any]:
+        raw = (event.payload or {}).get("door") or (event.payload or {}).get("target")
+        tgt = raw if raw in ("gate", "inner") else self.face_target
+        cfg = dict((self.door_policy or {}).get(tgt) or {})
+        cfg["target"] = tgt
+        return cfg
 
     async def on_cctv_event(self, event: CctvEvent) -> dict:
         """接收事实事件；决策开门。返回处理摘要。"""
@@ -119,8 +164,27 @@ class AccessPolicy:
             payload=event.payload,
         )
 
-        if not self.face_auto_open:
-            return {"action": "face_recorded_only", "reason": "face_auto_open_disabled"}
+        door_cfg = self._door_cfg_for_face(event)
+        tgt = door_cfg.get("target") or self.face_target
+        # AND：只记目击，不脉冲；只点按：不识别、不脉冲
+        if door_cfg.get("face_records_only") or (
+            door_cfg.get("sense") and door_cfg.get("tap") and door_cfg.get("op") == "and"
+        ):
+            if user_id and self.cloud is not None:
+                try:
+                    await self.cloud.push_door_sighting(user_id=user_id, target=tgt)
+                except Exception:
+                    _LOGGER.exception("上报门口目击失败")
+            return {"action": "face_recorded_only", "reason": "and_mode_sighting", "target": tgt}
+
+        face_pulses = bool(door_cfg.get("face_pulses"))
+        if not face_pulses and not door_cfg.get("sense"):
+            return {"action": "face_recorded_only", "reason": "sense_disabled", "target": tgt}
+        if not face_pulses:
+            # 兼容旧 face_auto_open=false
+            if not self.face_auto_open:
+                return {"action": "face_recorded_only", "reason": "face_auto_open_disabled"}
+            return {"action": "face_recorded_only", "reason": "face_no_pulse", "target": tgt}
 
         if self.require_grant_for_face and not has_grant:
             self.audit.append("face_denied", reason="无有效预约授权", person_id=decision.person.person_id)
@@ -132,6 +196,7 @@ class AccessPolicy:
             reason="face_match",
             person_id=decision.person.person_id,
             grant_id=grant_id,
+            target=tgt,
         )
         result, command_id = await self.door.open(
             reason="face_match",
@@ -142,7 +207,7 @@ class AccessPolicy:
             extra_reasons=extra,
         )
         await self._after_open(result, command_id, grant_id, user_id)
-        return {"action": result, "command_id": command_id}
+        return {"action": result, "command_id": command_id, "target": tgt}
 
     async def open_by_grant(self, grant_id: str) -> dict:
         decision = self.hot.decide_grant(grant_id)

@@ -21,7 +21,7 @@
 
 | 改什么 | 起什么 |
 |--------|--------|
-| 工作台 UI / 会话 / 比对 / 人脸库 | `./START.sh all`（或 `addon` + `addon-ui`） |
+| 工作台 UI / 会话 / 比对 / 人员 | `./START.sh all`（或 `addon` + `addon-ui`） |
 | `face_grant_mqtt` / `door_mqtt` / `lobn_office` | 一键里的本机 HA，或单独 `./START.sh dev` |
 | 两者联调 grant→自动化 | 本机可选 Mosquitto；**不必**指到店内 IP |
 
@@ -60,9 +60,9 @@
 
 `addon/` → 本地附加组件（仓库根 [repository.yaml](../repository.yaml)）。  
 Docker 多阶段会构建 `web/` → `app/webui`。  
-选项改 Frigate URL、`door_cameras` / `door_zones`、云端 HMAC、容量相关项（见 [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md)）。  
+选项改 Frigate URL、`door_cameras` / `door_zones`、云端 HMAC、容量相关项（见 [SmartOffice.md](SmartOffice.md)）。  
 `run.sh` 从 Supervisor 注入 MQTT。  
-侧边栏 Ingress → 工作台（概览 / 采集 / 人脸库 / 审计）；**无自建登录**。
+侧边栏 Ingress → 工作台（总览 / 人员 / 审计）；**无自建登录**。
 
 ### 4. 终验（可短时用本机指到 LAN）
 

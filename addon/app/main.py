@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -12,9 +13,17 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .access import AccessArbiter
+from .ai_client import AiClient
+from .alerts import Alert, AlertBus
+from .api_office import router as office_router
+from .arming import ArmingService
+from .assets_svc import AssetService
 from .auth import Actor, require_staff
 from .backup import backup_loop
 from .config import load_settings
+from .detect.person import build_detector
+from .environment import EnvironmentIntent
 from .face.embedder import build_embedder
 from .face.match import DoorMatcher, MatchConfig
 from .face.session import SessionManager
@@ -22,9 +31,11 @@ from .go2rtc import grab_jpeg_frames
 from .logging_setup import setup_logging
 from .maintenance import maintenance_loop, refresh_disk_full, run_maintenance_once
 from .mqtt_bus import MqttBus
+from .policy import ScheduleAdapter
+from .presence import PresenceLoop
 from .store import GalleryStore
 
-_LOGGER = logging.getLogger("smartcenter")
+_LOGGER = logging.getLogger("smartoffice")
 
 WEB = Path(__file__).resolve().parent / "webui"
 
@@ -58,20 +69,43 @@ class StartBody(BaseModel):
     channel: str = Field(default="staff", pattern="^(staff|student)$")
 
 
+def _open_store(settings) -> GalleryStore:
+    """库损坏时隔离旧文件另起新库（门可用性优先）。"""
+    try:
+        store = GalleryStore(settings.db_path)
+        if getattr(store, "integrity_ok", True):
+            return store
+        store.close()
+    except Exception:
+        _LOGGER.exception("db open failed")
+    bad = settings.db_path.with_suffix(settings.db_path.suffix + f".corrupt-{int(time.time())}")
+    try:
+        if settings.db_path.is_file():
+            settings.db_path.rename(bad)
+            _LOGGER.error("db corrupt; isolated to %s", bad)
+    except Exception:
+        _LOGGER.exception("db isolate failed")
+    return GalleryStore(settings.db_path)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = load_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.frames_dir.mkdir(parents=True, exist_ok=True)
     settings.backup_dir.mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "alert_frames").mkdir(parents=True, exist_ok=True)
+    (settings.data_dir / "vlm_tmp").mkdir(parents=True, exist_ok=True)
     setup_logging(
         settings.data_dir,
         max_bytes=max(1, settings.log_max_mb) * 1024 * 1024,
         backup_count=max(1, settings.log_backup_count),
     )
 
-    store = GalleryStore(settings.db_path)
+    store = _open_store(settings)
+    store.ensure_default_spaces(settings.door_node, list(settings.door_cameras))
     embedder = build_embedder(settings.embedder, settings.model_version)
+    detector = build_detector(settings.detector)
     sessions = SessionManager(
         store,
         embedder,
@@ -92,28 +126,79 @@ async def lifespan(app: FastAPI):
         ),
     )
     bus = MqttBus(settings.mqtt_host, settings.mqtt_port, settings.mqtt_user, settings.mqtt_password)
+    arbiter = AccessArbiter(store, bus, door_cooldown_sec=min(3.0, float(settings.cooldown_sec)))
     match_sem = asyncio.Semaphore(max(1, settings.match_concurrency))
     disk_flag: dict[str, Any] = {"disk_full": False}
+    http = httpx.AsyncClient(timeout=8.0)
+    ai = AiClient(
+        base_url=settings.ai_base_url,
+        api_key=settings.ai_api_key,
+        model=settings.ai_model,
+        per_minute=settings.ai_per_minute,
+        per_day=settings.ai_per_day,
+    )
+    assets = AssetService(store, bus)
+    arming = ArmingService(store, bus)
+    env = EnvironmentIntent(bus)
+
+    async def grab_alert_frame(camera: str) -> str | None:
+        if disk_flag.get("disk_full"):
+            return None
+        frames = await grab_jpeg_frames(settings.go2rtc_url, camera, count=1)
+        if not frames:
+            return None
+        from PIL import Image
+        import io
+
+        path = settings.data_dir / "alert_frames" / f"{int(time.time() * 1000)}_{camera}.jpg"
+        rgb = frames[0][:, :, ::-1]
+        Image.fromarray(rgb).save(path, format="JPEG", quality=75)
+        return str(path)
+
+    alerts = AlertBus(store, grab_frame=grab_alert_frame)
+    presence = PresenceLoop(store, settings, detector, alerts, arming, env, bus)
+    schedule = ScheduleAdapter(store, settings, arbiter, http)
 
     app.state.settings = settings
     app.state.store = store
     app.state.embedder = embedder
+    app.state.detector = detector
     app.state.sessions = sessions
     app.state.matcher = matcher
     app.state.bus = bus
+    app.state.arbiter = arbiter
+    app.state.alerts = alerts
+    app.state.assets = assets
+    app.state.arming = arming
+    app.state.ai = ai
+    app.state.schedule = schedule
     app.state.disk_full = False
-    app.state.http = httpx.AsyncClient(timeout=8.0)
+    app.state.http = http
 
-    # 启动即收敛一次，避免上次异常退出留下的脏数据立刻膨胀
     try:
-        boot = run_maintenance_once(store, settings, sessions, matcher)
+        boot = run_maintenance_once(store, settings, sessions, matcher, full_frame_scan=True)
         _LOGGER.info("boot maintenance %s", boot)
     except Exception:
         _LOGGER.exception("boot maintenance failed")
     disk_flag["disk_full"] = refresh_disk_full(settings)
     app.state.disk_full = bool(disk_flag["disk_full"])
 
+    async def on_mqtt(topic: str, payload: dict[str, Any]) -> None:
+        if topic == "frigate/events":
+            await on_frigate(payload)
+            return
+        if "/door/state" in topic:
+            parts = topic.split("/")
+            node = parts[1] if len(parts) > 1 else ""
+            state = str(payload.get("state") or payload.get("raw") or "").lower()
+            if node and state:
+                await presence.on_door_state(node, state)
+            return
+        if "/rfid/event" in topic:
+            await presence.on_rfid_event(payload)
+
     async def on_frigate(payload: dict[str, Any]) -> None:
+        """过渡：仍订 frigate person；自有检测并行跑 presence。"""
         if not embedder.ready or disk_flag.get("disk_full"):
             return
         typ = payload.get("type")
@@ -129,7 +214,6 @@ async def lifespan(app: FastAPI):
         ok, _why = matcher.should_handle(camera, zones, event_id)
         if not ok:
             return
-        # 限流：门口抓帧+推理不排队堆积（忙则丢，下一事件再试）
         try:
             await asyncio.wait_for(match_sem.acquire(), timeout=0.001)
         except TimeoutError:
@@ -140,14 +224,47 @@ async def lifespan(app: FastAPI):
                 store.audit(None, camera, 0.0, "skip", {"reason": "go2rtc_empty"})
                 return
             result = await asyncio.to_thread(matcher.match_frames, camera, frames, event_id)
-            if result.user_id and result.decision in ("grant", "deny"):
+            if result.user_id and result.decision in ("request", "deny"):
                 await _push_face_status(settings, result.user_id, store, client=app.state.http)
-            if result.decision == "grant" and result.grant:
-                await bus.publish_grant(result.grant)
+            if result.decision == "request" and result.request:
+                # 访客空间限制
+                uid = result.request.user_id
+                door = result.request.door
+                if not store.person_allowed_in_space(uid, door):
+                    store.audit(uid, camera, result.similarity, "deny", {"reason": "space_restricted"})
+                    await alerts.emit(
+                        Alert(kind="stranger", space_id=door, title="访客不在允许空间", camera=camera)
+                    )
+                    return
+                await arbiter.apply(result.request)
+            elif result.decision == "deny":
+                await alerts.emit(
+                    Alert(
+                        kind="stranger",
+                        space_id=settings.door_node,
+                        title="陌生人",
+                        camera=camera,
+                        detail={"similarity": result.similarity, "reason": result.reason},
+                    )
+                )
+            elif result.decision == "skip":
+                await alerts.emit(
+                    Alert(
+                        kind="ops",
+                        space_id=settings.door_node,
+                        title="看不清",
+                        severity="info",
+                        camera=camera,
+                        detail={"reason": result.reason},
+                    )
+                )
         finally:
             match_sem.release()
 
-    await bus.start(on_frigate)
+    await bus.start(on_mqtt)
+    await arming.start()
+    await presence.start()
+    await schedule.start()
 
     backup_task = asyncio.create_task(backup_loop(store, settings.backup_dir, settings.backup_interval_hours))
     maint_task = asyncio.create_task(
@@ -168,6 +285,9 @@ async def lifespan(app: FastAPI):
     finally:
         for t in (backup_task, maint_task, disk_task):
             t.cancel()
+        await schedule.stop()
+        await presence.stop()
+        await arming.stop()
         await bus.stop()
         try:
             await app.state.http.aclose()
@@ -176,7 +296,8 @@ async def lifespan(app: FastAPI):
         store.close()
 
 
-app = FastAPI(title="SmartCenter", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SmartOffice", version="0.4.0", lifespan=lifespan)
+app.include_router(office_router)
 
 # 本地「仅前端」静态页跨端口调 API 时需要 CORS（生产 Ingress 同域可忽略）
 try:
@@ -245,11 +366,17 @@ def _person_item(p, store: GalleryStore | None = None) -> dict:
         "enabled": p.enabled,
         "verify_ok_count": p.verify_ok_count,
         "verify_fail_streak": p.verify_fail_streak,
+        "updated_at": getattr(p, "updated_at", 0) or 0,
+        "ha_person_entity": getattr(p, "ha_person_entity", "") or "",
+        "person_kind": getattr(p, "person_kind", "staff") or "staff",
+        "valid_until": getattr(p, "valid_until", None),
+        "allowed_spaces": getattr(p, "allowed_spaces", "") or "",
         "has_thumb": False,
     }
     if store:
         paths = store.frame_paths_for_user(p.user_id)
         item["has_thumb"] = bool(paths)
+        item["frame_count"] = len(paths)
     return item
 
 
@@ -338,7 +465,10 @@ async def stats_dashboard(request: Request, actor: Actor = Depends(require_staff
         "mqtt_host": bus.host if bus.enabled else "off",
         "disk_full": bool(request.app.state.disk_full),
         "open_sessions": len(getattr(request.app.state.sessions, "_sessions", {})),
+        "ai_configured": bool(getattr(request.app.state.ai, "configured", False)),
+        "db_ok": bool(getattr(store, "integrity_ok", True)),
     }
+    data["overlapping_spaces"] = store.overlapping_policy_spaces()
     return data
 
 
@@ -428,10 +558,37 @@ async def person_thumb(user_id: str, request: Request, actor: Actor = Depends(re
 async def audit_list(
     request: Request,
     decision: str | None = None,
+    result: str | None = None,
+    source: str | None = None,
     limit: int = 50,
     actor: Actor = Depends(require_staff),
 ) -> dict:
-    rows = request.app.state.store.list_audit(limit=min(200, max(1, limit)), decision=decision or None)
+    """跨来源开门流水（仲裁 ledger）。decision 兼容旧查询，映射到 result。"""
+    res = result or decision
+    if res == "deny":
+        res = "drop"
+    rows = request.app.state.store.list_access_ledger(
+        limit=min(200, max(1, limit)),
+        result=res or None,
+        source=source or None,
+    )
+    return {"items": rows}
+
+
+@app.get("/api/match-audit")
+async def match_audit_list(
+    request: Request,
+    user_id: str | None = None,
+    decision: str | None = None,
+    limit: int = 50,
+    actor: Actor = Depends(require_staff),
+) -> dict:
+    """人脸比对明细（相似度 / 拒因）。"""
+    rows = request.app.state.store.list_audit(
+        limit=min(200, max(1, limit)),
+        decision=decision or None,
+        user_id=user_id or None,
+    )
     return {"items": rows}
 
 
@@ -596,7 +753,15 @@ async def match_test(request: Request, actor: Actor = Depends(require_staff)) ->
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         frames.append(np.asarray(img)[:, :, ::-1].copy())
     result = request.app.state.matcher.match_frames(camera, frames, event_id="test")
-    out = {"decision": result.decision, "reason": result.reason, "user_id": result.user_id, "similarity": result.similarity}
-    if result.grant and actor.is_admin:
-        out["command_id"] = result.grant.get("command_id")
+    out = {
+        "decision": result.decision,
+        "reason": result.reason,
+        "user_id": result.user_id,
+        "similarity": result.similarity,
+    }
+    if result.decision == "request" and result.request:
+        arb = await request.app.state.arbiter.apply(result.request)
+        out["arbiter"] = {"result": arb.result, "reason": arb.reason, "command_id": arb.command_id}
+        if arb.grant and actor.is_admin:
+            out["command_id"] = arb.grant.get("command_id")
     return out

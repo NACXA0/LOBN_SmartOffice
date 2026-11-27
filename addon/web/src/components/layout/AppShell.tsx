@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { StatusBar } from "./StatusBar";
+import { AssistantDrawer } from "@/components/AssistantDrawer";
 
 export function AppShell() {
   return (
@@ -12,6 +13,7 @@ export function AppShell() {
       </main>
       <StatusBar />
       <BottomNav />
+      <AssistantDrawer />
     </div>
   );
 }

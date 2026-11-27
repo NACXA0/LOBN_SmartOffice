@@ -1,7 +1,7 @@
 # 文档索引 · 智慧办公室（店内平台）
 
 > 仓库根：[../README.md](../README.md)  
-> 一句话：**HAOS 四 App + MQTT；刷脸在 SmartCenter Add-on（本仓 `addon/`）**。  
+> 一句话：**HAOS 四 App + MQTT；智能层在 SmartOffice（本仓 `addon/`）**。  
 > **边界**：本目录只写店内 HAOS / Add-on / 固件 / 总线。云端业务见 [LOBN_FireClassroom/docs](../LOBN_FireClassroom/docs/README.md)。
 
 ## 怎么读
@@ -12,7 +12,7 @@
 | 店内从零装齐 | [部署体系.md](部署体系.md) · 摘要 [部署说明.md](部署说明.md) |
 | 已有 HAOS 怎么接 | [对接已有HAOS.md](对接已有HAOS.md) |
 | 本机日常开发（热更） | [开发工作流.md](开发工作流.md) |
-| 人脸采集 / 库 / 开门 / 工作台 | [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md) |
+| SmartOffice 人员 / 开门 / 工作台 | [SmartOffice.md](SmartOffice.md) |
 | 勾选是否可上线 | [验收清单.md](验收清单.md) |
 | 云端 / 小程序 / 管理端 | [../LOBN_FireClassroom/docs/README.md](../LOBN_FireClassroom/docs/README.md) |
 
@@ -40,7 +40,7 @@
 
 | 文档 | 内容 |
 |------|------|
-| [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md) | 职责、状态机、工作台四页、容量、API |
+| [SmartOffice.md](SmartOffice.md) | 职责、仲裁、人员工作台、容量、API；旧人脸专文跳转至此 |
 | [资产防盗-RFID.md](资产防盗-RFID.md) | RFID 通道防盗（店内平台；与 FireClassroom 解耦） |
 | [examples/frigate.config.phase1.example.yml](examples/frigate.config.phase1.example.yml) | 阶段① Frigate 骨架 |
 | [examples/frigate.config.face-door.example.yml](examples/frigate.config.face-door.example.yml) | 刷脸阶段 Frigate（关人脸库） |

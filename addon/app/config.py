@@ -41,6 +41,13 @@ class Settings(BaseModel):
     # 开发态：跳过 HA Ingress 鉴权
     allow_dev_auth: bool = False
     embedder: str = "mock"  # mock | onnx
+    # 在线 AI（可选；不进开门热路径）
+    ai_base_url: str = ""
+    ai_api_key: str = ""
+    ai_model: str = "gpt-4o-mini"
+    ai_per_minute: float = 6.0
+    ai_per_day: float = 200.0
+    detector: str = "hog"  # mock | hog | opencv | onnx | companion
 
     @property
     def mqtt_enabled(self) -> bool:
@@ -102,8 +109,12 @@ def _from_options(raw: dict[str, Any], *, local_dev: bool = False) -> Settings:
         mqtt_password=str(os.environ.get("MQTT_PASSWORD", raw.get("mqtt_password", ""))),
         allow_dev_auth=os.environ.get("SMARTCENTER_DEV_AUTH", "").lower() in ("1", "true", "yes"),
         embedder=str(os.environ.get("SMARTCENTER_EMBEDDER", raw.get("embedder", "mock"))),
-        # options.json 也可带 mqtt_*；无 Supervisor 注入时回落
-        # （run.sh 已 export MQTT_* 时上面分支优先）
+        ai_base_url=str(raw.get("ai_base_url", "") or ""),
+        ai_api_key=str(raw.get("ai_api_key", "") or ""),
+        ai_model=str(raw.get("ai_model", "gpt-4o-mini") or "gpt-4o-mini"),
+        ai_per_minute=float(raw.get("ai_per_minute", 6)),
+        ai_per_day=float(raw.get("ai_per_day", 200)),
+        detector=str(raw.get("detector", "hog") or "hog"),
     )
 
 
