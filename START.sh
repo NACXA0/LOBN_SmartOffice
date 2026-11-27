@@ -7,7 +7,6 @@
 # 业务子仓：
 #   3) LOBN_FireClassroom —— 小程序 / 云端 API / 管理端
 #
-# SmartCenter/ 子模块目录仍保留，待你手动归档删除；日常从本脚本启动。
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -126,9 +125,6 @@ cmd_diagnose() {
     echo "[OK] LOBN_FireClassroom/START.sh"
   else
     echo "[WARN] 缺 LOBN_FireClassroom（submodule update）"
-  fi
-  if [[ -d "$ROOT/SmartCenter" ]]; then
-    echo "[INFO] SmartCenter/ 子模块仍在（待手动归档，见 docs/归档-SmartCenter准备清单.md）"
   fi
   echo "--- 磁盘 ---"
   df -h "$ROOT" | tail -1
@@ -888,8 +884,6 @@ menu() {
     cat <<EOF
 智慧办公室（本地开发测试）
   店内平台在本仓根（addon / config / firmware）。
-  SmartCenter/ 子模块待手动归档。
-
   1) 启动
   2) 开发 ← 一键 Add-on+本机HA / 消防教室
   3) 运维

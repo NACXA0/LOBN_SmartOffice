@@ -2,7 +2,7 @@ name: SmartCenter
 version: "0.2.0"
 slug: smartcenter
 description: 交互式人脸采集、本地底库与刷脸开门决策（发 business/access/grant）
-url: https://github.com/NACXA0/SmartCenter
+url: https://github.com/NACXA0/LOBN_SmartOffice
 arch:
   - amd64
   - aarch64

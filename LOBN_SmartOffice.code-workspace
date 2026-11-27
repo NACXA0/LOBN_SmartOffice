@@ -1,8 +1,7 @@
 {
   "folders": [
     { "name": "LOBN_SmartOffice（主仓）", "path": "." },
-    { "name": "LOBN_FireClassroom", "path": "LOBN_FireClassroom" },
-    { "name": "SmartCenter（待归档）", "path": "SmartCenter" }
+    { "name": "LOBN_FireClassroom", "path": "LOBN_FireClassroom" }
   ],
   "settings": {
     "git.detectSubmodules": true,

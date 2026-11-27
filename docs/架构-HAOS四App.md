@@ -4,7 +4,7 @@
 > 一句话：一台 HAOS 主机跑四个 Supervisor 托管的 App（HA 本体 + Mosquitto + Frigate Full Access + **SmartCenter Add-on**），一条 MQTT 总线串起来，一个 HACS 集成（Frigate Integration）做 HA 侧实体翻译，云端 FastAPI 做 M 端业务决策，所有硬件直连各自的管理节点（摄像头→Frigate，ESP 门禁板→ESPHome）。  
 > **人脸**：Frigate 关 Face Recognition；交互式采集、人脸库治理、门口比对、概览/审计工作台见 [人脸-SmartCenter-Add-on.md](人脸-SmartCenter-Add-on.md)。本机开发：[开发工作流.md](开发工作流.md)。
 
-自研 [SmartCCTV](决策-归档自研SmartCCTV.md) 已裁定归档，不进入本架构。
+自研 [SmartCCTV](归档/决策-归档自研SmartCCTV.md) 已裁定归档，不进入本架构。
 
 ---
 

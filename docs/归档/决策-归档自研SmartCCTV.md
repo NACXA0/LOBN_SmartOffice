@@ -2,7 +2,7 @@
 
 > 状态：已裁定 · 主仓目录与 submodule 已删除 · 见 [归档-SmartCCTV准备清单.md](归档-SmartCCTV准备清单.md)  
 > 日期：2026-11-25  
-> 终态架构：[架构-HAOS四App.md](架构-HAOS四App.md) · 店内下一步：[阶段1-HAOS底座验收.md](阶段1-HAOS底座验收.md)
+> 终态架构：[../架构-HAOS四App.md](../架构-HAOS四App.md) · 店内下一步：[../阶段1-HAOS底座验收.md](../阶段1-HAOS底座验收.md)
 
 ---
 

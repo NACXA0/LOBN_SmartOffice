@@ -4,6 +4,7 @@ HAOS Supervisor Add-on：交互式人脸采集、本地人脸库、门口比对 
 
 - 专文：[docs/人脸-SmartCenter-Add-on.md](../docs/人脸-SmartCenter-Add-on.md)  
 - 本机热更：[docs/开发工作流.md](../docs/开发工作流.md)  
+- 文档索引：[docs/README.md](../docs/README.md)  
 - 前端源码：[web/README.md](web/README.md)
 
 ## 开发（本机优先，不连店内 HAOS）
