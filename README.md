@@ -4,6 +4,8 @@
 
 原则：云端管交易与采集中继、**SmartOffice 是办公室总管**（人员/空间/资产/放行/告警/问询）、HA 管保命与设备、Frigate 管录像与 go2rtc（关 Face Recognition）、继电器只听 ESPHome。预约只是场景适配器之一。契约：[docs/接口契约.md](docs/接口契约.md) · 总管专文：[docs/SmartOffice.md](docs/SmartOffice.md)。
 
+**通用 vs 场景 vs HA**（同一套资源 + 作用域视图，不复制模块）：[docs/架构-通用与场景.md](docs/架构-通用与场景.md)。里门可 `always_open`，预约关掉时人员/造访/告警仍运行。
+
 店内平台在**本仓根**（`addon/` · `config/` · `firmware/`）。自研 SmartCCTV、旧 SmartCenter 子模块均已归档——[docs/归档/](docs/归档/README.md)。
 
 ## 目录
@@ -58,18 +60,3 @@ git submodule update --init --recursive   # LOBN_FireClassroom
 ```
 
 验收：[docs/验收清单.md](docs/验收清单.md) · 密钥：[docs/部署与密钥.md](docs/部署与密钥.md) · **文档索引**：[docs/README.md](docs/README.md) · 云端：[LOBN_FireClassroom/docs/README.md](LOBN_FireClassroom/docs/README.md)
-
-
-
-
-
-
-
-
-
-首页的“教室”在“套餐”上面，是纵向排布。
-优化两个指示器，增加更多的内容：
-教室：人数、教师数。预约和指引按钮都放进来。点击进入教室页。
-首页去除wifi。
-顶部栏中间（门店与系统胶囊之间），防止客服（图标+文字）
-

@@ -36,6 +36,19 @@ class ArmBody(BaseModel):
     schedule: list[dict[str, Any]] | None = None
 
 
+class AccessModeBody(BaseModel):
+    access_mode: str = Field(default="face", pattern="^(face|schedule|always_open|armed_only)$")
+
+
+class SceneBody(BaseModel):
+    id: str = ""
+    name: str = ""
+    kind: str = "classroom"
+    adapter: str = ""
+    space_ids: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
 class AssetBody(BaseModel):
     tag_id: str
     name: str = ""
@@ -228,6 +241,45 @@ async def manual_open(
         "reason": result.reason,
         "command_id": result.command_id,
     }
+
+
+@router.put("/api/spaces/{space_id}/access-mode")
+async def set_access_mode(
+    space_id: str, body: AccessModeBody, request: Request, actor: Actor = Depends(require_staff)
+) -> dict:
+    if not request.app.state.store.get_space(space_id):
+        raise HTTPException(404, "not_found")
+    return request.app.state.store.set_space_access_mode(space_id, body.access_mode)
+
+
+@router.get("/api/scenes")
+async def list_scenes(request: Request, actor: Actor = Depends(require_staff)) -> dict:
+    return {"items": request.app.state.store.list_scenes()}
+
+
+@router.post("/api/scenes")
+async def upsert_scene(body: SceneBody, request: Request, actor: Actor = Depends(require_staff)) -> dict:
+    sid = (body.id or body.name or "").strip()
+    if not sid:
+        raise HTTPException(400, "id_required")
+    return request.app.state.store.upsert_scene(
+        sid,
+        name=body.name or sid,
+        kind=body.kind,
+        adapter=body.adapter,
+        space_ids=body.space_ids,
+        enabled=body.enabled,
+    )
+
+
+@router.get("/api/scenes/{scene_id}")
+async def scene_detail(scene_id: str, request: Request, actor: Actor = Depends(require_staff)) -> dict:
+    sc = request.app.state.store.get_scene(scene_id)
+    if not sc:
+        raise HTTPException(404, "not_found")
+    spaces = request.app.state.store.list_spaces_for_scene(scene_id)
+    visits = request.app.state.store.list_visits_for_spaces([s["id"] for s in spaces], limit=30)
+    return {**sc, "spaces": spaces, "recent_visits": visits}
 
 
 @router.post("/api/spaces/{space_id}/arm")

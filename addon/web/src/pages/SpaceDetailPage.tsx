@@ -310,6 +310,30 @@ export function SpaceDetailPage() {
         )}
       </div>
 
+      <div className="panel">
+        <h3>门禁模式</h3>
+        <p className="muted">
+          里门可设「常开」：不发开门指令，但识别与造访仍运行；预约关掉也不影响人员管理。
+        </p>
+        <select
+          className="input"
+          value={space?.access_mode || "face"}
+          onChange={async (e) => {
+            try {
+              setSpace(await api.setAccessMode(spaceId, e.target.value));
+              toast.push("门禁模式已更新");
+            } catch (err) {
+              toast.push(String(err instanceof Error ? err.message : err));
+            }
+          }}
+        >
+          <option value="face">刷脸开门</option>
+          <option value="schedule">策略窗口为主</option>
+          <option value="always_open">常开（仍识别）</option>
+          <option value="armed_only">仅布防时限制</option>
+        </select>
+      </div>
+
       {canOpen && (
         <div className="note-chip-row">
           {note ? <span className="note-chip">{note}</span> : <span className="muted">开门备注（可选）</span>}

@@ -123,6 +123,7 @@ async def lifespan(app: FastAPI):
             door_node=settings.door_node,
             door_cameras=list(settings.door_cameras),
             door_zones=list(settings.door_zones),
+            sight_frames_dir=str(settings.data_dir / "sight_frames"),
         ),
     )
     bus = MqttBus(settings.mqtt_host, settings.mqtt_port, settings.mqtt_user, settings.mqtt_password)
@@ -226,38 +227,70 @@ async def lifespan(app: FastAPI):
             result = await asyncio.to_thread(matcher.match_frames, camera, frames, event_id)
             if result.user_id and result.decision in ("request", "deny"):
                 await _push_face_status(settings, result.user_id, store, client=app.state.http)
+            # 按摄像头所属空间决定门禁；无绑定时回退全局 door_node
+            cam_space = store.find_space_by_camera(camera) or store.get_space(settings.door_node) or {}
+            space_id = str(cam_space.get("id") or settings.door_node)
+            access_mode = str(cam_space.get("access_mode") or "face")
+
             if result.decision == "request" and result.request:
-                # 访客空间限制
                 uid = result.request.user_id
-                door = result.request.door
-                if not store.person_allowed_in_space(uid, door):
-                    store.audit(uid, camera, result.similarity, "deny", {"reason": "space_restricted"})
-                    await alerts.emit(
-                        Alert(kind="stranger", space_id=door, title="访客不在允许空间", camera=camera)
+                door = str(cam_space.get("door_node") or result.request.door or space_id)
+                # 里门常开：识别与造访已在 match 内完成，这里只跳过 grant
+                if access_mode == "always_open":
+                    store.audit(
+                        uid,
+                        camera,
+                        result.similarity,
+                        "skip",
+                        {"reason": "always_open", "space_id": space_id},
                     )
                     return
+                if not store.person_allowed_in_space(uid, space_id) and not store.person_allowed_in_space(
+                    uid, door
+                ):
+                    store.audit(uid, camera, result.similarity, "deny", {"reason": "space_restricted"})
+                    await alerts.emit(
+                        Alert(kind="stranger", space_id=space_id, title="访客不在允许空间", camera=camera)
+                    )
+                    return
+                result.request.door = door
                 await arbiter.apply(result.request)
             elif result.decision == "deny":
+                title = "陌生人"
+                if result.reason == "sighted_new":
+                    title = "新面孔已建档"
+                elif result.reason == "stranger":
+                    title = "陌生人再次出现"
+                elif result.user_id:
+                    title = f"已识别·不可开门 ({result.reason})"
                 await alerts.emit(
                     Alert(
                         kind="stranger",
-                        space_id=settings.door_node,
-                        title="陌生人",
+                        space_id=space_id,
+                        title=title,
                         camera=camera,
-                        detail={"similarity": result.similarity, "reason": result.reason},
+                        detail={
+                            "similarity": result.similarity,
+                            "reason": result.reason,
+                            "user_id": result.user_id,
+                            "access_mode": access_mode,
+                        },
                     )
                 )
             elif result.decision == "skip":
-                await alerts.emit(
-                    Alert(
-                        kind="ops",
-                        space_id=settings.door_node,
-                        title="看不清",
-                        severity="info",
-                        camera=camera,
-                        detail={"reason": result.reason},
+                if result.reason == "ignored":
+                    pass  # 忽略名单：再识别但不告警（FaceID ignore list）
+                else:
+                    await alerts.emit(
+                        Alert(
+                            kind="ops",
+                            space_id=settings.door_node,
+                            title="看不清",
+                            severity="info",
+                            camera=camera,
+                            detail={"reason": result.reason},
+                        )
                     )
-                )
         finally:
             match_sem.release()
 
@@ -371,24 +404,74 @@ def _person_item(p, store: GalleryStore | None = None) -> dict:
         "person_kind": getattr(p, "person_kind", "staff") or "staff",
         "valid_until": getattr(p, "valid_until", None),
         "allowed_spaces": getattr(p, "allowed_spaces", "") or "",
+        "origin": getattr(p, "origin", "office") or "office",
+        "linked_user_id": getattr(p, "linked_user_id", "") or "",
+        "first_seen_at": getattr(p, "first_seen_at", None),
+        "last_seen_at": getattr(p, "last_seen_at", None),
+        "visit_count": int(getattr(p, "visit_count", 0) or 0),
+        "sighted": bool(getattr(p, "sighted", False)),
+        "notes": getattr(p, "notes", "") or "",
+        "phone": getattr(p, "phone", "") or "",
+        "ignored": bool(getattr(p, "ignored", False)),
+        "can_open": False,
         "has_thumb": False,
     }
     if store:
-        paths = store.frame_paths_for_user(p.user_id)
-        item["has_thumb"] = bool(paths)
-        item["frame_count"] = len(paths)
+        photos = store.list_person_photos(p.user_id)
+        item["has_thumb"] = any(ph.get("has_file") for ph in photos)
+        item["frame_count"] = len(photos)
+        item["can_open"] = store.can_open_by_face(p.user_id)
     return item
+
+
+class CreatePersonBody(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    user_id: str = Field(default="", max_length=120)
+    person_kind: str = "staff"  # staff|student|visitor
+    notes: str = Field(default="", max_length=500)
+    phone: str = Field(default="", max_length=40)
+    enabled: bool = True
+    valid_until: float | None = None
+    allowed_spaces: str = ""
+
+
+@app.post("/api/persons")
+async def create_person(
+    body: CreatePersonBody, request: Request, actor: Actor = Depends(require_staff)
+) -> dict:
+    """手动建档：未识别过也可先录入信息，再上传人脸照片或现场采集。"""
+    store = request.app.state.store
+    try:
+        p = store.create_person(
+            user_id=body.user_id or None,
+            display_name=body.display_name.strip(),
+            person_kind=body.person_kind,
+            origin="manual",
+            notes=body.notes.strip(),
+            phone=body.phone.strip(),
+            enabled=body.enabled,
+            valid_until=body.valid_until,
+            allowed_spaces=body.allowed_spaces.strip(),
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+    return _person_item(p, store)
 
 
 @app.get("/api/persons")
 async def persons(
     request: Request,
     q: str = "",
+    scope: str = "all",
     actor: Actor = Depends(require_staff),
 ) -> dict:
+    """人员=办公室里出现过的所有人（含陌生人）；scope=all|sighted|credential|stranger。
+    credential=预约等平台录入了人脸但尚未被监控识别到的人。
+    """
     store = request.app.state.store
-    rows = store.search_persons(q) if q.strip() else store.list_persons()
-    return {"items": [_person_item(p, store) for p in rows]}
+    sc = scope if scope in ("all", "sighted", "credential", "stranger") else "all"
+    rows = store.search_persons(q, scope=sc) if q.strip() else store.list_persons(scope=sc)
+    return {"items": [_person_item(p, store) for p in rows], "scope": sc}
 
 
 @app.get("/api/persons/search")
@@ -478,13 +561,53 @@ async def person_detail(user_id: str, request: Request, actor: Actor = Depends(r
     p = store.get_person(user_id)
     if not p:
         raise HTTPException(404, "not_found")
-    paths = store.frame_paths_for_user(user_id)
+    photos = store.list_person_photos(user_id)
     item = _person_item(p, store)
-    item["frame_count"] = len(paths)
-    item["frames"] = [
-        {"index": i, "url": f"/api/persons/{user_id}/frame/{i}"} for i in range(len(paths))
+    item["photos"] = [
+        {
+            "id": ph["id"],
+            "url": f"/api/persons/{user_id}/photos/{ph['id']}",
+            "created_at": ph["created_at"],
+            "has_file": ph["has_file"],
+        }
+        for ph in photos
     ]
+    # 兼容旧 UI：按序帧
+    item["frames"] = [
+        {"index": i, "url": f"/api/persons/{user_id}/frame/{i}", "id": ph["id"]}
+        for i, ph in enumerate(photos)
+    ]
+    item["visits"] = store.list_visits(user_id, limit=30)
     return item
+
+
+class LinkBody(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/persons/{user_id}/link")
+async def link_person(
+    user_id: str,
+    body: LinkBody,
+    request: Request,
+    actor: Actor = Depends(require_staff),
+) -> dict:
+    """把陌生人/重复档关联合并到已有身份（如预约平台 user_id）。"""
+    store = request.app.state.store
+    try:
+        p = store.link_persons(user_id, body.target_user_id.strip())
+    except KeyError:
+        raise HTTPException(404, "not_found") from None
+    return _person_item(p, store)
+
+
+@app.get("/api/persons/{user_id}/visits")
+async def person_visits(
+    user_id: str, request: Request, limit: int = 40, actor: Actor = Depends(require_staff)
+) -> dict:
+    if not request.app.state.store.get_person(user_id):
+        raise HTTPException(404, "not_found")
+    return {"items": request.app.state.store.list_visits(user_id, limit=limit)}
 
 
 @app.get("/api/persons/{user_id}/frame/{index}")
@@ -498,23 +621,139 @@ async def person_frame(user_id: str, index: int, request: Request, actor: Actor 
     return FileResponse(path, media_type="image/jpeg")
 
 
-class RenameBody(BaseModel):
-    display_name: str = Field(min_length=0, max_length=120)
+@app.get("/api/persons/{user_id}/photos/{emb_id}")
+async def person_photo_file(
+    user_id: str, emb_id: int, request: Request, actor: Actor = Depends(require_staff)
+):
+    photos = request.app.state.store.list_person_photos(user_id)
+    hit = next((p for p in photos if p["id"] == emb_id), None)
+    if not hit or not hit.get("frame_path"):
+        raise HTTPException(404, "no_frame")
+    path = Path(hit["frame_path"])
+    if not path.is_file():
+        raise HTTPException(404, "missing_file")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.post("/api/persons/{user_id}/photos")
+async def upload_person_photos(
+    user_id: str,
+    request: Request,
+    files: list[UploadFile] = File(...),
+    actor: Actor = Depends(require_staff),
+) -> dict:
+    """相册入库：上传一张或多张人脸照片追加为参考图（借鉴 FaceID photo-library enrollment）。"""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from .face.quality import QualityConfig, evaluate_meta
+
+    store = request.app.state.store
+    emb = request.app.state.embedder
+    if not store.get_person(user_id):
+        raise HTTPException(404, "not_found")
+    if request.app.state.disk_full:
+        raise HTTPException(507, "disk_full")
+    if not emb.ready:
+        raise HTTPException(503, "model_not_loaded")
+
+    # 相册照允许静态/略宽质检（不像门口防翻拍那么严）
+    qcfg = QualityConfig(reject_gray=False, max_static_cosine=1.0)
+    vecs: list = []
+    paths: list[str | None] = []
+    rejected: list[dict] = []
+    out_dir = request.app.state.settings.data_dir / "gallery_photos" / user_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for f in files[:12]:
+        raw = await f.read()
+        if not raw or len(raw) > 8_000_000:
+            rejected.append({"name": f.filename, "reason": "too_large_or_empty"})
+            continue
+        try:
+            img = Image.open(io.BytesIO(raw)).convert("RGB")
+            # 过大则缩小，省盘
+            img.thumbnail((1280, 1280))
+            bgr = np.asarray(img)[:, :, ::-1].copy()
+        except Exception:
+            rejected.append({"name": f.filename, "reason": "bad_image"})
+            continue
+        vec, meta = emb.embed(bgr)
+        ok, reason = evaluate_meta(meta, qcfg)
+        if not ok or vec is None:
+            rejected.append({"name": f.filename, "reason": reason or "embed_fail"})
+            continue
+        dest = out_dir / f"{int(time.time() * 1000)}_{len(paths)}.jpg"
+        img.save(dest, format="JPEG", quality=88)
+        vecs.append(vec)
+        paths.append(str(dest))
+
+    if not vecs:
+        raise HTTPException(400, detail={"reason": "no_valid_face", "rejected": rejected})
+
+    try:
+        stats = store.append_person_photos(
+            user_id, emb.model_version, vecs, paths, max_photos=20
+        )
+    except KeyError:
+        raise HTTPException(404, "not_found") from None
+    p = store.get_person(user_id)
+    return {
+        "ok": True,
+        **stats,
+        "rejected": rejected,
+        "person": _person_item(p, store),
+    }
+
+
+@app.delete("/api/persons/{user_id}/photos/{emb_id}")
+async def delete_person_photo(
+    user_id: str, emb_id: int, request: Request, actor: Actor = Depends(require_staff)
+) -> dict:
+    ok = request.app.state.store.delete_person_photo(user_id, emb_id)
+    if not ok:
+        raise HTTPException(404, "not_found")
+    return {"ok": True, "id": emb_id}
+
+
+class PersonPatchBody(BaseModel):
+    display_name: str | None = Field(default=None, max_length=120)
+    person_kind: str | None = None
+    notes: str | None = Field(default=None, max_length=500)
+    phone: str | None = Field(default=None, max_length=40)
+    ignored: bool | None = None
+    enabled: bool | None = None
+    valid_until: float | None = None
+    set_valid_until: bool = False
+    allowed_spaces: str | None = None
 
 
 @app.patch("/api/persons/{user_id}")
 async def patch_person(
     user_id: str,
-    body: RenameBody,
+    body: PersonPatchBody,
     request: Request,
     actor: Actor = Depends(require_staff),
 ) -> dict:
     store = request.app.state.store
-    if not store.get_person(user_id):
-        raise HTTPException(404, "not_found")
-    store.set_display_name(user_id, body.display_name.strip())
-    p = store.get_person(user_id)
-    return _person_item(p, store)  # type: ignore[arg-type]
+    try:
+        p = store.update_person(
+            user_id,
+            display_name=body.display_name.strip() if body.display_name is not None else None,
+            person_kind=body.person_kind,
+            notes=body.notes,
+            phone=body.phone,
+            ignored=body.ignored,
+            enabled=body.enabled,
+            valid_until=body.valid_until,
+            set_valid_until=body.set_valid_until or body.valid_until is not None,
+            allowed_spaces=body.allowed_spaces,
+        )
+    except KeyError:
+        raise HTTPException(404, "not_found") from None
+    return _person_item(p, store)
 
 
 @app.post("/api/persons/{user_id}/disable")

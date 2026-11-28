@@ -212,6 +212,8 @@ img { display: block; max-width: 100%; }
 }
 
 .field { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; }
+textarea.input { min-height: 72px; resize: vertical; font: inherit; }
+select.input { appearance: auto; cursor: pointer; }
 .input, .select-trigger {
   width: 100%;
   padding: 11px 12px;

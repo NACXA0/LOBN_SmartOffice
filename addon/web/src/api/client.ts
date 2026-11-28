@@ -12,6 +12,37 @@ export type Person = {
   updated_at?: number;
   frame_count?: number;
   ha_person_entity?: string;
+  person_kind?: string;
+  origin?: string;
+  linked_user_id?: string;
+  first_seen_at?: number | null;
+  last_seen_at?: number | null;
+  visit_count?: number;
+  sighted?: boolean;
+  can_open?: boolean;
+  valid_until?: number | null;
+  allowed_spaces?: string;
+  notes?: string;
+  phone?: string;
+  ignored?: boolean;
+};
+
+export type PersonPhoto = {
+  id: number;
+  url: string;
+  created_at?: number;
+  has_file?: boolean;
+};
+
+export type VisitRow = {
+  id: number;
+  user_id: string;
+  space_id: string;
+  camera: string;
+  kind: string;
+  similarity: number;
+  detail: Record<string, unknown>;
+  created_at: number;
 };
 
 export type AuditRow = {
@@ -53,6 +84,10 @@ export type Dashboard = {
   persons: {
     total: number;
     enabled_door: number;
+    sighted?: number;
+    strangers?: number;
+    credential_only?: number;
+    visits_h24?: number;
     by_status: Record<string, number>;
     pending_recollect: { user_id: string; display_name: string; face_status: string; updated_at: number }[];
   };
@@ -99,6 +134,8 @@ export type Space = {
   armed?: boolean;
   arm_override?: boolean | null;
   person_count?: number;
+  access_mode?: "face" | "schedule" | "always_open" | "armed_only" | string;
+  scene_ids?: string[];
   updated_at?: number;
   windows?: { id: string; subject_id: string; window_start: number; window_end: number }[];
   arming_plan?: unknown[];
@@ -118,7 +155,9 @@ export type AlertRow = {
 
 export type PersonDetail = Person & {
   frame_count: number;
-  frames: { index: number; url: string }[];
+  frames: { index: number; url: string; id?: number }[];
+  photos?: PersonPhoto[];
+  visits?: VisitRow[];
 };
 
 declare global {
@@ -143,7 +182,11 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {
     const detail = (body as { detail?: unknown }).detail;
-    throw new Error(typeof detail === "string" ? detail : r.statusText || "request_failed");
+    if (typeof detail === "string") throw new Error(detail);
+    if (detail && typeof detail === "object" && "reason" in (detail as object)) {
+      throw new Error(String((detail as { reason: string }).reason));
+    }
+    throw new Error(r.statusText || "request_failed");
   }
   return body as T;
 }
@@ -152,20 +195,85 @@ export const api = {
   health: () => json<Health>("/healthz"),
   stats: () => json<Dashboard>("/api/stats"),
   searchPersons: (q: string) => json<{ items: Person[] }>(`/api/persons/search?q=${encodeURIComponent(q)}`),
-  listPersons: (q = "") =>
-    json<{ items: Person[] }>(`/api/persons${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  listPersons: (q = "", scope = "all") => {
+    const qs = new URLSearchParams();
+    if (q) qs.set("q", q);
+    if (scope && scope !== "all") qs.set("scope", scope);
+    const s = qs.toString();
+    return json<{ items: Person[]; scope?: string }>(`/api/persons${s ? `?${s}` : ""}`);
+  },
   personDetail: (uid: string) => json<PersonDetail>(`/api/persons/${encodeURIComponent(uid)}`),
+  createPerson: (body: {
+    display_name: string;
+    user_id?: string;
+    person_kind?: string;
+    notes?: string;
+    phone?: string;
+    enabled?: boolean;
+    valid_until?: number | null;
+    allowed_spaces?: string;
+  }) =>
+    json<Person>("/api/persons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  patchPerson: (
+    uid: string,
+    body: {
+      display_name?: string;
+      person_kind?: string;
+      notes?: string;
+      phone?: string;
+      ignored?: boolean;
+      enabled?: boolean;
+      valid_until?: number | null;
+      set_valid_until?: boolean;
+      allowed_spaces?: string;
+    },
+  ) =>
+    json<Person>(`/api/persons/${encodeURIComponent(uid)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  personVisits: (uid: string, limit = 40) =>
+    json<{ items: VisitRow[] }>(`/api/persons/${encodeURIComponent(uid)}/visits?limit=${limit}`),
+  linkPerson: (uid: string, target_user_id: string) =>
+    json<Person>(`/api/persons/${encodeURIComponent(uid)}/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_user_id }),
+    }),
   renamePerson: (uid: string, display_name: string) =>
     json<Person>(`/api/persons/${encodeURIComponent(uid)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ display_name }),
     }),
+  uploadPersonPhotos: async (uid: string, files: File[]) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return json<{
+      ok: boolean;
+      added: number;
+      total: number;
+      pruned?: number;
+      rejected?: { name?: string; reason?: string }[];
+      person?: Person;
+    }>(`/api/persons/${encodeURIComponent(uid)}/photos`, { method: "POST", body: fd });
+  },
+  deletePersonPhoto: (uid: string, embId: number) =>
+    json<{ ok: boolean }>(`/api/persons/${encodeURIComponent(uid)}/photos/${embId}`, {
+      method: "DELETE",
+    }),
   enablePerson: (uid: string) => json(`/api/persons/${encodeURIComponent(uid)}/enable`, { method: "POST" }),
   disablePerson: (uid: string) => json(`/api/persons/${encodeURIComponent(uid)}/disable`, { method: "POST" }),
   deletePerson: (uid: string) => json(`/api/persons/${encodeURIComponent(uid)}`, { method: "DELETE" }),
   thumbUrl: (uid: string) => apiUrl(`/api/persons/${encodeURIComponent(uid)}/thumb`),
   frameUrl: (uid: string, index: number) => apiUrl(`/api/persons/${encodeURIComponent(uid)}/frame/${index}`),
+  photoUrl: (uid: string, embId: number) =>
+    apiUrl(`/api/persons/${encodeURIComponent(uid)}/photos/${embId}`),
   audit: (result = "", limit = 80, source = "") => {
     const qs = new URLSearchParams({ limit: String(limit) });
     if (result) qs.set("result", result);
@@ -247,6 +355,31 @@ export const api = {
     ),
   setArm: (id: string, body: { armed?: boolean; override?: boolean; schedule?: unknown[] }) =>
     json<Space>(`/api/spaces/${encodeURIComponent(id)}/arm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  setAccessMode: (id: string, access_mode: string) =>
+    json<Space>(`/api/spaces/${encodeURIComponent(id)}/access-mode`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_mode }),
+    }),
+  listScenes: () =>
+    json<{ items: { id: string; name: string; kind: string; adapter: string; space_ids: string[]; enabled: boolean }[] }>(
+      "/api/scenes",
+    ),
+  sceneDetail: (id: string) =>
+    json<Record<string, unknown>>(`/api/scenes/${encodeURIComponent(id)}`),
+  upsertScene: (body: {
+    id: string;
+    name?: string;
+    kind?: string;
+    adapter?: string;
+    space_ids?: string[];
+    enabled?: boolean;
+  }) =>
+    json(`/api/scenes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

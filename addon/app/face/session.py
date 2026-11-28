@@ -63,7 +63,17 @@ class SessionManager:
         )
         self._sessions[sid] = sess
         self._by_user[user_id] = sid
-        self.store.upsert_person(user_id, sess.display_name, "pending", enabled=True)
+        # student 通道来自预约平台：只建凭证，不记造访
+        origin = "booking" if channel == "student" else "office"
+        kind = "student" if channel == "student" else "staff"
+        self.store.upsert_person(
+            user_id,
+            sess.display_name,
+            "pending",
+            enabled=True,
+            person_kind=kind,
+            origin=origin,
+        )
         return sess
 
     def get(self, session_id: str) -> EnrollSession | None:
@@ -134,12 +144,17 @@ class SessionManager:
         sess.frame_paths.append(str(path))
 
         if len(sess.vectors) >= sess.needed:
+            origin = "booking" if sess.channel == "student" else "office"
+            kind = "student" if sess.channel == "student" else "staff"
             self.store.commit_enrollment(
                 sess.user_id,
                 sess.display_name,
                 self.embedder.model_version,
                 sess.vectors,
                 sess.frame_paths,
+                person_kind=kind,
+                origin=origin,
+                mark_sighted=False,  # 预约录入 ≠ 造访过办公室
             )
             self.cancel(session_id, drop_frames=False)
             return {

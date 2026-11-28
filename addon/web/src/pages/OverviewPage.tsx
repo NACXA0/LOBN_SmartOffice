@@ -85,7 +85,7 @@ export function OverviewPage() {
             <div className="kpi-label">今日放行</div>
             <div className="kpi-val">{h24.grant}</div>
             <div className="kpi-sub">
-              拒 {h24.deny}
+              造访 {d?.persons.visits_h24 ?? 0}
               {typeof h24.drop === "number" ? ` · 丢弃 ${h24.drop}` : ""}
             </div>
           </div>
@@ -129,9 +129,19 @@ export function OverviewPage() {
 
       <div className="card" style={{ marginTop: 14 }}>
         <div className="card-head">
-          <h3 className="card-title" style={{ margin: 0 }}>待重采队列</h3>
-          <button type="button" className="linkish" onClick={() => navigate("/people?status=pending")}>
-            查看全部
+          <h3 className="card-title" style={{ margin: 0 }}>人员</h3>
+          <button type="button" className="linkish" onClick={() => navigate("/people")}>
+            全部档案
+          </button>
+        </div>
+        <p className="note">
+          已造访 {d?.persons.sighted ?? 0} · 陌生人 {d?.persons.strangers ?? 0} · 仅凭证{" "}
+          {d?.persons.credential_only ?? 0}（预约录了脸但还没来过）
+        </p>
+        <div className="card-head" style={{ marginTop: 12 }}>
+          <h3 className="card-title" style={{ margin: 0 }}>待重采</h3>
+          <button type="button" className="linkish" onClick={() => navigate("/people")}>
+            查看
           </button>
         </div>
         {pending.length === 0 ? (

@@ -117,6 +117,10 @@ def run_maintenance_once(
         max_rows=settings.audit_max_rows,
         max_age_days=settings.audit_max_age_days,
     )
+    stats["visits"] = store.prune_visits(
+        max_rows=max(5000, settings.audit_max_rows),
+        max_age_days=int(max(30, settings.audit_max_age_days)),
+    )
     stats["grants"] = store.prune_grants_seen(max_age_hours=settings.grants_seen_max_age_hours)
     stats["rfid_seen"] = store.prune_rfid_seen(max_age_hours=settings.grants_seen_max_age_hours)
     stats["policy"] = store.prune_policy_windows()
