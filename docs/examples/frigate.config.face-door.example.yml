@@ -9,8 +9,10 @@ mqtt:
 
 go2rtc:
   streams:
+    # 店内示例：海康/通用 RTSP（账号密码请改 secrets / 本地覆盖，勿提交真口令）
+    # 实机样例形态：rtsp://USER:PASS@192.168.15.1:554/LiveMedia/ch1/Media1
     front_desk:
-      - rtsp://user:pass@192.168.1.100:554/Streaming/Channels/101
+      - rtsp://user:pass@192.168.15.1:554/LiveMedia/ch1/Media1
 
 cameras:
   front_desk:
@@ -23,6 +25,7 @@ cameras:
             - record
     detect:
       enabled: true
+      # 源常见 2560x1440；检测降采样省算力
       width: 1280
       height: 720
       fps: 5

@@ -1,0 +1,47 @@
+# 复制为仓库外或 gitignore 路径后填入真密码，例如：
+#   cp docs/examples/frigate.config.local.yml.example /tmp/frigate.config.local.yml
+# 本机联调：Frigate Full Access / docker 挂载该文件为 /config/config.yml
+#
+# 业务链：
+#   摄像头 RTSP → Frigate(person/zone) → MQTT frigate/#
+#   → SmartOffice 比对仲裁 → business/access/grant
+#   → HA face_grant_mqtt → home/<node>/door/command
+#   → ESPHome 或遗留 EspDoorAdapter HTTP 脉冲
+
+mqtt:
+  host: 127.0.0.1
+  # user / password 按 Mosquitto 实际填写；本机无鉴权可省略
+
+go2rtc:
+  streams:
+    front_desk:
+      - rtsp://admin:CHANGE_ME@192.168.15.1:554/LiveMedia/ch1/Media1
+
+cameras:
+  front_desk:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_desk
+          input_args: preset-rtsp-restream
+          roles: [detect, record]
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 7
+        mode: motion
+    zones:
+      front_desk_zone:
+        coordinates: 0.1,0.1,0.9,0.1,0.9,0.9,0.1,0.9
+
+objects:
+  track: [person]
+
+face_recognition:
+  enabled: false
+
+version: 0.16-0
